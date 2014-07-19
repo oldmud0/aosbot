@@ -12,14 +12,17 @@ client.start();
 console.log("ENet client initialized.");
 
 //Establish connection to our server
-var serverAddr = new enet.Address("50.103.252.249", 32887);
+var id = 3322578207;
+var serverIP = [ id & 0xFF, (id >> 8) & 0xFF, (id >> 16) & 0xFF, (id >> 24) & 0xFF ].join('.');
+var serverAddr = new enet.Address(serverIP, 32887);
+serverAddr.hostToString = function(){return [ serverAddr._host & 0xFF, (serverAddr._host >> 8) & 0xFF, (serverAddr._host >> 16) & 0xFF, (serverAddr._host >> 24) & 0xFF ].join('.');}
 console.log("Got server address.");
 
-console.log("Connecting to server...");
+console.log("Connecting to server " + serverAddr.hostToString() + ":" + serverAddr.port() + "...");
 var peer = client.connect(
 	serverAddr,
 	1, //Channels we're going to use (does it even matter?)
-	3, //Data
+	0x6e390fac, //Data
 	function(err, peer) {
 		if(err) {
 			console.log(err);
@@ -30,6 +33,11 @@ var peer = client.connect(
 		peer.ping();
 	}
 );
+
+var packet1 = new enet.Packet( new Buffer("HELLOWORLD"),enet.Packet.FLAG_RELIABLE);
+peer.send(0, packet1);
+var packet2 = new enet.Packet( new Buffer("\x83\x7b\x88\xb1\xfd\xf1\xdf\x57\x6b\x99"),enet.Packet.FLAG_RELIABLE);
+peer.send(0, packet2);
 
 peer.on("connect", function(connectedPeer, incomingPacket, isOutgoing) {
 	//Connection success
