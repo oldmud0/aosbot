@@ -1,9 +1,13 @@
+//npm dependencies
 var enet 	= require('enet');
 var buf2hex 	= require("hex");
 var colors 	= require("colors");
 var ansi	= require("ansi")
    ,cursor	= ansi(process.stdout);
 var zlib	= require("zlib");
+
+//Local files
+var mapFuncs	= require("./map");
 
 var id = 16777343;
 var port = 51253;
@@ -31,7 +35,7 @@ function connect(id, port) {
 		serverAddr,
 		1, //Channels we're going to use (AoS does not work in surround)
 		3, //Data
-		function(err) {
+		function peerConnectCallback(err) {
 			if(err) {
 				console.log(err);
 				return;
@@ -43,7 +47,7 @@ function connect(id, port) {
 initClient();
 connect(id, port);
 
-peer.on("connect", function() {
+peer.on("connect", function connectCallback() {
 	//Connection success
 	console.log("Connection established to " + serverAddr.hostToString() + " through port " + serverAddr.port());
 	peer.ping();
@@ -57,7 +61,7 @@ peer.on("connect", function() {
 //17 (chat msg)
 //2 (constant feed of all player positions)
 
-peer.on("message", function(packet, channel) {
+peer.on("message", function messageCallback(packet, channel) {
 	packetID = packet.data().readUInt8(0);
 	
 	//Event based package handling (terrible)
@@ -83,9 +87,11 @@ peer.on("message", function(packet, channel) {
 			//Add packet's length to the progress
 			peer.session.map.progress += packet.data().length-1;
 			
-			//Show our current progress
-			process.stdout.write(peer.session.map.progress + "/" + peer.session.map.size);
-			cursor.horizontalAbsolute(0);
+			//Show our current progress. However, we don't want to slow down the download by waiting for the console, so we'll write back every few bytes.
+			if( Math.round(peer.session.map.progress % 30000 * 0.001) === 0) {
+				process.stdout.write(peer.session.map.progress + "/" + peer.session.map.size);
+				cursor.horizontalAbsolute(0);
+			}
 			break;
 		case 15: //Gamemode data
 			//For now we'll also use it as a way to tell us when to stop downloading the map.
@@ -95,100 +101,43 @@ peer.on("message", function(packet, channel) {
 			///////////////////////////////
 			//Let's decompress this map! :D
 			///////////////////////////////
-			console.log("Decompressing map...")
-			var err = zlib.inflate(peer.session.map.dataRaw, function(err, result) {
-				cursor.horizontalAbsolute(0);
+			cursor.horizontalAbsolute(0).write("Decompressing map...")
+			var err = zlib.inflate(peer.session.map.dataRaw, function inflateCallback(err, result) {
 				
-				//If we got an error, print it out
+				//If we got an error, print it out and stop
 				if(err) {
 					console.log( ("DECOMPRESSION ERROR: " + err).bold.yellow.redBG );
 					return err;
 				}
 				
-				//Else, tell the user that decompression's done and assign the result to map data
+				//Tell the user that decompression's done and assign the result to map data
 				console.log("Decompression completed. Map size: " + result.length + " bytes.");
 				peer.session.map.data = result;
+			
+				//We don't need dataRaw anymore. Delete it.
+				delete peer.session.map.dataRaw;
+			
+			
+				////////////
+				//Decode RLE
+				////////////
+				
+				//But first, let's take a moment to create a 3D array that will hold our voxels.
+				//Basically, all we need to know is if a voxel is an open voxel (false) or a solid voxel (true).
+				mapFuncs.initVoxelArray(peer.session.map);
+				
+				cursor.horizontalAbsolute(0).write("Decoding RLE from map...");
+				mapFuncs.loadMap(peer.session.map);
+				console.log("RLE decode complete.");
+				
+				console.log("--- Map load complete ---".bold.yellow.cyanBG);
 			});
-			
-			//We don't need dataRaw anymore. Delete it.
-			delete peer.session.map.dataRaw;
-			
-			//Stop here if we've gotten an error
-			if(err) {
-				console.log("We got an error. Stop map extraction.".bold.redBG);
-				break;
-			}
-			
-			////////////
-			//Decode RLE
-			////////////
-			
-			//But first, let's take a moment to create a 3D array that will hold our voxels.
-			//Basically, all we need to know if a voxel is an open voxel (false) or a solid voxel (true).
-			peer.session.map.voxeldata = [];
-			peer.session.map.voxeldata[0] = [];
-			peer.session.map.voxeldata[0][0] = [];
-			
-			var loadMap = function() {
-				var x,y,z,v = 0;
-				for (y=0; y < 512; ++y) {
-					for (x=0; x < 512; ++x) {
-						for (z=0; z < 64; ++z) {
-							peer.session.map.voxeldata[x][y][z] = 1;
-						}
-						z = 0;
-						for(;;) {
-							//var color;
-							var number_4byte_chunks = peer.session.map.data.readUInt8(v+0);
-							var top_color_start = peer.session.map.data.readUInt8(v+1);
-							var top_color_end   = peer.session.map.data.readUInt8(v+2); // inclusive
-							var bottom_color_start;
-							var bottom_color_end; // exclusive
-							var len_top;
-							var len_bottom;
-
-							for(var i=z; i < top_color_start; i++)
-								peer.session.map.voxeldata[x][y][i] = 0;
-
-							//color = (uint32 *) (v+4);
-							//for(z=top_color_start; z <= top_color_end; z++)
-							//setcolor(x,y,z,*color++);
-
-							len_bottom = top_color_end - top_color_start + 1;
-
-							// check for end of data marker
-							if (number_4byte_chunks == 0) {
-								// infer ACTUAL number of 4-byte chunks from the length of the color data
-								v += 4 * (len_bottom + 1);
-								break;
-							}
-
-							// infer the number of bottom colors in next span from chunk length
-							len_top = (number_4byte_chunks-1) - len_bottom;
-
-							// now skip the v pointer past the data to the beginning of the next span
-							v += peer.session.map.data.readUInt8(v+0)*4;
-
-							bottom_color_end   = peer.session.map.data.readUInt8(v+3); // aka air start
-							bottom_color_start = bottom_color_end - len_top;
-
-							//for(z=bottom_color_start; z < bottom_color_end; ++z) {
-							//	setcolor(x,y,z,*color++);
-							//}
-							
-							z = bottom_color_end;
-						}
-					}
-				}
-				assert(v-base == len);
-			}
-			
 			
 			break;
 	}
 });
 
-peer.on("disconnect", function() {
+peer.on("disconnect", function disconnectCallback() {
 	//Disconnected
 	console.log("dang it");
 	client.stop();
