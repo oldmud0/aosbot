@@ -117,7 +117,6 @@ peer.on("message", function messageCallback(packet, channel) {
 				//We don't need dataRaw anymore. Delete it.
 				delete peer.session.map.dataRaw;
 			
-			
 				////////////
 				//Decode RLE
 				////////////
@@ -131,6 +130,25 @@ peer.on("message", function messageCallback(packet, channel) {
 				console.log("RLE decode complete.");
 				
 				console.log("--- Map load complete ---".bold.yellow.cyanBG);
+				
+				///////////////
+				//Get game data
+				///////////////
+				
+				//Initialize player and game info objects
+				peer.session.player = {};
+				peer.session.game = {};
+				
+				/*
+				ROAD WORK AHEAD
+				   _       _
+				  |0|     |0|
+				 =/=\==!==/=\=
+				 // \\   // \\
+				//   \\ //   \\
+				*/
+				
+				//TODO: Get game data and spawn the player. 
 			});
 			
 			break;
