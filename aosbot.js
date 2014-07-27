@@ -10,6 +10,7 @@ iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encod
 
 //Local files
 var mapFuncs	= require("./map");
+var gameFuncs	= require("./game");
 
 var id = 16777343;
 var port = 51253;
@@ -83,6 +84,7 @@ peer.on("message", function messageCallback(packet, channel) {
 			console.log("--- Map start ---".bold.yellow.cyanBG);
 			peer.session.map = {};
 			peer.session.map.currentlyGrabbing = true;
+			peer.session.joining = true;
 			
 			//buf2hex(packet.data());
 			
@@ -153,82 +155,76 @@ peer.on("message", function messageCallback(packet, channel) {
 			//Get game data
 			///////////////
 			
-			//Initialize player and game info objects
-			peer.session.game = {};
+			//Initialize game info object
+			if(peer.session.joining)
+				peer.session.game = {};
 			
 			//Construct fog and team objects
 			peer.session.game.fog = {
-				blue:	packet.data().readUInt8(1),
-				green:	packet.data().readUInt8(2),
-				red:	packet.data().readUInt8(3)
+				blue:	packet.data().readUInt8(2),
+				green:	packet.data().readUInt8(3),
+				red:	packet.data().readUInt8(4)
 			};
 			
-			peer.session.game.team1 = {
-				blue:	packet.data().readUInt8(4),
-				green:	packet.data().readUInt8(5),
-				red:	packet.data().readUInt8(6),
-				name:	packet.data().toString("cp437", 10, 20)
-			};
+			gameFuncs.getTeamData(peer.session.game, packet);
 			
-			peer.session.game.team2 = {
-				blue:	packet.data().readUInt8(7),
-				green:	packet.data().readUInt8(8),
-				red:	packet.data().readUInt8(9),
-				name:	packet.data().toString("cp437", 20, 30)
-			}
 			
 			//If the gamemode is CTF, make a game state object with CTF-related data
 			if(packet.data().readUInt8(30) === 0x0) {
-				console.log("Gamemode: CTF");
+				//We don't want the console to get hectic since this packet could get sent multiple times.
+				if(peer.session.joining) 
+					console.log("Gamemode: CTF");
+				
 				peer.session.game.state = {
-					gamemode: packet.data().readUInt8(30),
-					captureLimit: packet.data().readUInt8(33),
-					intelFlags: packet.data().readUInt8(34),
+					gamemode: packet.data().readUInt8(31),
+					captureLimit: packet.data().readUInt8(34),
+					intelFlags: packet.data().readUInt8(35),
 					
 					team1: {
-						score: packet.data().readUInt8(31),
+						score: packet.data().readUInt8(32),
 						
 						//We need to check if the position data is just padding. If it is, then a player has the intel.
-						intel: packet.data().readUInt8(36) === packet.data().readUInt8(37) && packet.data().readUInt8(37) === packet.data().readUInt8(38) ?
+						intel: packet.data().readUInt8(37) === packet.data().readUInt8(38) && packet.data().readUInt8(38) === packet.data().readUInt8(39) ?
 						{
-							player: packet.data().readUInt8(35)
+							player: packet.data().readUInt8(36)
 						} : //If not, then it's just xyz coordinates.
 						{
-							x: packet.data().readFloatLE(35),
-							y: packet.data().readFloatLE(39),
-							z: packet.data().readFloatLE(43)
+							x: packet.data().readFloatLE(36),
+							y: packet.data().readFloatLE(40),
+							z: packet.data().readFloatLE(44)
 						},
 						
 						base: {
-							x: packet.data().readFloatLE(53),
-							y: packet.data().readFloatLE(57),
-							z: packet.data().readFloatLE(61)
+							x: packet.data().readFloatLE(60),
+							y: packet.data().readFloatLE(64),
+							z: packet.data().readFloatLE(68)
 						}
 					},
 					
 					team2: {
-						score: packet.data().readUInt8(32),
+						score: packet.data().readUInt8(33),
 						
-						intel: packet.data().readUInt8(48) === packet.data().readUInt8(49) && packet.data().readUInt8(50) === packet.data().readUInt8(51) ?
+						intel: packet.data().readUInt8(49) === packet.data().readUInt8(50) && packet.data().readUInt8(50) === packet.data().readUInt8(51) ?
 						{
-							player: packet.data().readUInt8(47)
+							player: packet.data().readUInt8(48)
 						} :
 						{
-							x: packet.data().readFloatLE(47),
-							y: packet.data().readFloatLE(48),
-							z: packet.data().readFloatLE(49)
+							x: packet.data().readFloatLE(48),
+							y: packet.data().readFloatLE(52),
+							z: packet.data().readFloatLE(56)
 						},
 						
 						base: {
-							x: packet.data().readFloatLE(65),
-							y: packet.data().readFloatLE(69),
-							z: packet.data().readFloatLE(73)
+							x: packet.data().readFloatLE(72),
+							y: packet.data().readFloatLE(76),
+							z: packet.data().readFloatLE(80)
 						}
 					}
 				};
 			//If it's TC, there's a problem because I haven't added that part yet.
 			} else if(packet.data().readUInt8(30) === 0x1) {
-				console.error( ("ERROR: TC has not been implemented yet. Continue at your own risk...").bold.yellow.redBG );
+				if(peer.session.joining) 
+					console.error( ("ERROR: TC has not been implemented yet. Continue at your own risk...").bold.yellow.redBG );
 				peer.session.game.state = {
 					gamemode: packet.data().readUInt8(30)
 					
@@ -236,14 +232,28 @@ peer.on("message", function messageCallback(packet, channel) {
 				};
 			//If it's something else, we have another problem.
 			} else {
-				console.error( ("ERROR: Gamemode "+packet.data().readUInt8(30)+" is unknown. Continue at your own risk...").bold.yellow.redBG );
+				if(peer.session.joining) 
+					console.error( ("ERROR: Gamemode "+packet.data().readUInt8(30)+" is unknown. Continue at your own risk...").bold.yellow.redBG );
 				peer.session.game.state = {
 					gamemode: packet.data().readUInt8(30)
 				};
 			}
 			
-			console.log("Object data:");
-			console.log(peer.session.game.state);
+			if(peer.session.joining) {			
+				//////////////////
+				//Spawn the player
+				//////////////////
+					
+				//Initialize player object
+				peer.session.player = {};
+				
+				//Get our ID
+				peer.session.player.id = packet.data().readUInt8(1);
+				
+				console.log( "ID is " + ( "#" + peer.session.player.id).bold );
+				
+				peer.session.joining = false;
+			}
 			
 			/*
 			ROAD WORK AHEAD
@@ -253,8 +263,6 @@ peer.on("message", function messageCallback(packet, channel) {
 			 // \\   // \\
 			//   \\ //   \\
 			*/
-			
-			//TODO: Spawn the player. 
 			
 			break;
 		case 2: //Player positions
