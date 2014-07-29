@@ -86,15 +86,16 @@ peer.on("message", function messageCallback(packet, channel) {
 			peer.session.map.currentlyGrabbing = true;
 			peer.session.joining = true;
 			
-			//buf2hex(packet.data());
-			
-			//break;
+			//Read the map size
 			peer.session.map.size = packet.data().readUInt32LE(1);
 			console.log("Map size: " + peer.session.map.size + " bytes.");
 			
+			//Create a temporary buffer to hold the map data as it's coming through
 			peer.session.map.dataRaw = new Buffer(peer.session.map.size);
 			peer.session.map.progress = 0;
+			
 			break;
+		
 		case 19: //Map data packet
 			//Copy packet data (except the packet ID) to the map data
 			packet.data().copy(peer.session.map.dataRaw, peer.session.map.progress, 1);
@@ -108,6 +109,12 @@ peer.on("message", function messageCallback(packet, channel) {
 				cursor.horizontalAbsolute(0);
 			}
 			break;
+			
+		//////////////////////////
+		//Gamemode-related packets
+		//////////////////////////
+		//{
+		
 		case 15: //Gamemode data
 			//We can also use it as a way to tell us when to stop downloading the map.
 			
@@ -168,59 +175,12 @@ peer.on("message", function messageCallback(packet, channel) {
 			
 			gameFuncs.getTeamData(peer.session.game, packet);
 			
-			
 			//If the gamemode is CTF, make a game state object with CTF-related data
 			if(packet.data().readUInt8(30) === 0x0) {
 				//We don't want the console to get hectic since this packet could get sent multiple times.
 				if(peer.session.joining) 
 					console.log("Gamemode: CTF");
-				
-				peer.session.game.state = {
-					gamemode: packet.data().readUInt8(31),
-					captureLimit: packet.data().readUInt8(34),
-					intelFlags: packet.data().readUInt8(35),
-					
-					team1: {
-						score: packet.data().readUInt8(32),
-						
-						//We need to check if the position data is just padding. If it is, then a player has the intel.
-						intel: packet.data().readUInt8(37) === packet.data().readUInt8(38) && packet.data().readUInt8(38) === packet.data().readUInt8(39) ?
-						{
-							player: packet.data().readUInt8(36)
-						} : //If not, then it's just xyz coordinates.
-						{
-							x: packet.data().readFloatLE(36),
-							y: packet.data().readFloatLE(40),
-							z: packet.data().readFloatLE(44)
-						},
-						
-						base: {
-							x: packet.data().readFloatLE(60),
-							y: packet.data().readFloatLE(64),
-							z: packet.data().readFloatLE(68)
-						}
-					},
-					
-					team2: {
-						score: packet.data().readUInt8(33),
-						
-						intel: packet.data().readUInt8(49) === packet.data().readUInt8(50) && packet.data().readUInt8(50) === packet.data().readUInt8(51) ?
-						{
-							player: packet.data().readUInt8(48)
-						} :
-						{
-							x: packet.data().readFloatLE(48),
-							y: packet.data().readFloatLE(52),
-							z: packet.data().readFloatLE(56)
-						},
-						
-						base: {
-							x: packet.data().readFloatLE(72),
-							y: packet.data().readFloatLE(76),
-							z: packet.data().readFloatLE(80)
-						}
-					}
-				};
+				gameFuncs.getCTFData(peer.session.game, packet);
 			//If it's TC, there's a problem because I haven't added that part yet.
 			} else if(packet.data().readUInt8(30) === 0x1) {
 				if(peer.session.joining) 
@@ -239,7 +199,7 @@ peer.on("message", function messageCallback(packet, channel) {
 				};
 			}
 			
-			if(peer.session.joining) {			
+			if(peer.session.joining) {
 				//////////////////
 				//Spawn the player
 				//////////////////
@@ -247,43 +207,296 @@ peer.on("message", function messageCallback(packet, channel) {
 				//Initialize player object
 				peer.session.player = {};
 				
+				//Initialize player list. Note that an object declaration *may* be more efficient than an array declaration.
+				peer.session.players = {};
+				
 				//Get our ID
 				peer.session.player.id = packet.data().readUInt8(1);
 				
-				console.log( "ID is " + ( "#" + peer.session.player.id).bold );
+				console.log( "ID is " + (peer.session.player.id.toString()).bold );
 				
+				//Set our name
+				peer.session.player.name = "MyFirstBot";
+				
+				//Also, let's link our player to peer.session.players in case we are called out by the server.
+				peer.session.players[id] = peer.session.player;
+				
+				//Let's create an "existing player" packet and send it to the server. (Despite the name, this is our only way in.)
+				var newPlayerBuffer = new Buffer(28);
+				
+				//Write the packet
+				newPlayerBuffer.writeUInt8(     9,                        0) ; //Packet #9
+				newPlayerBuffer.writeUInt8(     peer.session.player.id,   1);  //Player ID. Server probably doesn't care about it.
+				newPlayerBuffer.writeInt8(      0,                        2);  //What team to choose? Who cares since the server will probably balance us. (-1 = spec, 0 = team1, 1 = team2)
+				newPlayerBuffer.writeUInt8(     0,                        3);  //(0 = rifle, 1 = smg, 2 = shotgun)
+				newPlayerBuffer.writeUInt8(     0,                        4);  //Held item; discarded by server. Only used server -> client. (0 = spade, 1 = block, 2 = gun, 3 = grenade)
+				newPlayerBuffer.writeUInt32LE(  0,                        5);  //Kills; also discarded by server.
+				newPlayerBuffer.writeUInt8(     0,                        9);  //Block color. Again, discarded by server. (Blue)
+				newPlayerBuffer.writeUInt8(     0,                        10); //(Green)
+				newPlayerBuffer.writeUInt8(     0,                        11); //(Red)
+				newPlayerBuffer.write(          peer.session.player.name, 12, 16, "cp437"); //Our name
+				
+				peer.send(0, new enet.Packet(newPlayerBuffer, enet.Packet.FLAG_RELIABLE), function(err) {
+					if(err)
+						console.error( ("ERROR: " + err).bold.yellow.redBG );
+					else
+						console.log("We have a bot on ground.".bold.yellow.cyanBG);
+						peer.session.player.alive = true;
+				});
+				
+				//Marks the end of the joining process
 				peer.session.joining = false;
 			}
 			
-			/*
-			ROAD WORK AHEAD
-			   _       _
-			  |0|     |0|
-			 =/=\==!==/=\=
-			 // \\   // \\
-			//   \\ //   \\
-			*/
+			break;
+		
+		case 23: //Intel capture
+			var capper = peer.session.players[packet.data().readUInt8(1)];
+			
+			console.log( 
+			((capper.name)[capper.team === 0 ? "blue" : "green"].bold)
+			+ " just captured the intel for " + peer.session.game[capper.team === 0 ? "team1" : "team2"].name + "!" 
+			+ (packet.data().readUInt8(2) === 1 ? "(win)" : "") 
+			);
+			break;
+		
+		case 24: //Intel pickup
+			var capper = peer.session.players[packet.data().readUInt8(1)];
+			
+			console.log( 
+			((capper.name)[capper.team === 0 ? "blue" : "green"].bold)
+			+ " picked up the intel for " + peer.session.game[capper.team === 0 ? "team1" : "team2"].name + "!"
+			);
+			
+			//Set intel position to the player id
+			peer.session.game.state[capper.team === 0 ? "team1" : "team2"].intel = {
+				player: packet.data().readUInt8(1)
+			};
+			break;
+		
+		case 25: //Intel dropped
+			var capper = peer.session.players[packet.data().readUInt8(1)];
+			
+			console.log( 
+			((capper.name)[capper.team === 0 ? "blue" : "green"].bold)
+			+ " dropped the intel."
+			);
+			
+			//Set intel position according to packet
+			peer.session.game.state[capper.team === 0 ? "team1" : "team2"].intel = {
+				x: packet.data().readInt32LE(2),
+				y: packet.data().readInt32LE(6),
+				z: packet.data().readInt32LE(10)
+			};
+			break;
+		
+		case 21: //Territory captured
+			//nobody plays TC anymore :(
+			break;
+		
+		case 22: //TC progress bar
+			//no-op
+			break;
+		
+		//}
+			
+		////////////////////////
+		//Player-related packets 
+		////////////////////////
+		//{
+		
+		case 12: //Create player (as response to the packet #9 that we sent). Sent when a player joins after we've joined as opposed to packet #9 below.
+			peer.session.players[packet.data().readUInt8(1)] = {
+				weapon: packet.data().readUInt8(2),
+				team: packet.data().readInt8(3),
+				pos: {
+					x: packet.data().readFloatLE(4),
+					y: packet.data().readFloatLE(8),
+					z: packet.data().readFloatLE(12)
+				},
+				name: packet.data().toString("cp437", 13, 29),
+				
+				//We'll need these later
+				orient: {},
+				color: {}
+			};
+			break;
+		
+		case 9: //Existing player. Sent when we join while there are players online.
+			peer.session.players[packet.data().readUInt8(1)] = {
+				team: packet.data().readInt8(2),
+				weapon: packet.data().readUInt8(3),
+				heldItem: packet.data().readUInt8(4),
+				kills: packet.data().readUInt32LE(5),
+				color: {
+					b: packet.data().readUInt8(9),
+					g: packet.data().readUInt8(10),
+					r: packet.data().readUInt8(11)
+				},
+				name: packet.data().toString("cp437", 12, 29),
+				
+				//We'll need these later
+				pos: {},
+				orient: {}
+			};
+			break;
+		
+		case 10: //Short player data. Used when player switches teams or weapon.
+			var id = packet.data().readUInt8(1);
+			
+			peer.session.players[id].team = packet.data().readInt8(2);
+			peer.session.players[id].weapon = packet.data().readUInt8(3);
+			break;
+			
+		case 2: //Player positions. 0.76 does a lot nicer job in doing this, but right now we are only working with 0.75 data.
+			var offset = 1; //Offset increments by 24 bytes, the size of each player pos data part
+			var id; //id indicates player number.
+			
+			for(id = 1; id <= 32; id++) {
+				//If the id exists, process it. If not, nothing will happen.
+				if(typeof peer.session.players[id] != "undefined") {
+					//Position data
+					peer.session.players[id].pos.x = packet.data().readFloatLE(offset + 0);
+					peer.session.players[id].pos.y = packet.data().readFloatLE(offset + 4);
+					peer.session.players[id].pos.z = packet.data().readFloatLE(offset + 8);
+					
+					//Orientation data
+					peer.session.players[id].orient.x = packet.data().readFloatLE(offset + 12);
+					peer.session.players[id].orient.y = packet.data().readFloatLE(offset + 16);
+					peer.session.players[id].orient.z = packet.data().readFloatLE(offset + 20);
+				}
+				offset += 24;
+			}
 			
 			break;
-		case 2: //Player positions
-			//TODO
+		
+		case 29: //Change team
+			var player = peer.session.players[packet.data().readUInt8(1)];
+			
+			console.log( 
+			((player.name)[player.team === 0 ? "blue" : "green"].bold)
+			+ " joined "
+			+ (packet.data().readInt8(2) === 0 ? peer.session.game.team1.name : packet.data().readInt8(2) === 1 ? peer.session.game.team2.name : "Spectator")
+			);
+			
+			//Set player's team
+			player.team = packet.data().readInt8(2);
 			break;
+			
+		case 30: //Change weapon
+			peer.session.players[packet.data().readUInt8(1)].weapon = packet.data().readUInt8(2);
+			break;
+		
+		case 7: //Set player's currently equipped tool
+			peer.session.players[packet.data().readUInt8(1)].heldItem = packet.data().readInt8(2); //0 = spade, 1 = block, 2 = gun, 3 = grenade
+			break;
+		
+		case 8: //Set player's block color
+			var id = packet.data().readUInt8(1);
+			
+			peer.session.players[id].color.b = packet.data().readUInt8(2);
+			peer.session.players[id].color.g = packet.data().readUInt8(3);
+			peer.session.players[id].color.r = packet.data().readUInt8(4);
+			break;
+			
+		case 3: //Input data
+			//no-op for now
+			break;
+			
+		case 4: //Weapon fire
+			//no-op for now
+			break;
+			
+		case 28: //Weapon reload
+			//no-op for now
+			break;
+		
+		case 26: //Restock
+			//If it's us, resupply everything. If not, we don't care.
+			if(packet.data().readUInt8(1) === peer.session.player.id) {
+				//TODO: uh, we don't have any weapon info.
+			}
+			break;
+		
+		case 27: //Fog color
+			//We don't really care about fog
+			//no-op
+			break;
+			
+		case 16: //Kill action
+			//If it was our bot, print it out. If not, don't do anything.
+			if(packet.data().readUInt8(1) === peer.session.player.id) {
+				var weapon = (
+				packet.data().readUInt8(3) === 0 && peer.session.players[packet.data().readUInt8(2)].weapon === 0 ? "rifle" :
+				packet.data().readUInt8(3) === 0 && peer.session.players[packet.data().readUInt8(2)].weapon === 1 ? "SMG" :
+				packet.data().readUInt8(3) === 0 && peer.session.players[packet.data().readUInt8(2)].weapon === 2 ? "shotgun" :
+				packet.data().readUInt8(3) === 1 ? "headshot" :
+				packet.data().readUInt8(3) === 2 ? "spade" :
+				packet.data().readUInt8(3) === 3 ? "grenade" :
+				packet.data().readUInt8(3) === 4 ? "fall" :
+				packet.data().readUInt8(3) === 5 ? "team change" :
+				packet.data().readUInt8(3) === 6 ? "class change" :
+				"anomaly"
+				);
+				
+				console.log( peer.session.player.name + " was killed by " + peer.session.players[packet.data().readUInt8(2)].name + " with a " + weapon + ". Respawn in " + packet.data().readUInt8(4) + " seconds." );
+				
+				peer.session.player.alive = false;
+				
+				//After the respawn time is depleted, we'll say that our bot is alive again
+				setTimeout(function respawnPlayer() {
+					peer.session.player.alive = true;
+				}, packet.data().readUInt8(4)*1000);
+			}
+			break;
+		
+		case 20: //Player leaves
+			console.log( 
+			((peer.session.players[packet.data().readUInt8(1)].name).white.bold)
+			+ " left the server."
+			);
+		
+			delete peer.session.players[packet.data().readUInt8(1)]; //Delete vs null vs undefined? Who cares, they all just dereference.
+			break;
+			
+		//}
+		
+		case 13: //Block action
+			var action = {
+				type: packet.data().readUInt8(2), //0 = build, 1 = bullet, 2 = spade, 3 = grenade
+				x: packet.data().readInt32LE(3),
+				y: packet.data().readInt32LE(7),
+				z: packet.data().readInt32LE(11)
+			};
+			
+			if(action.type === 0)
+				peer.session.map.voxeldata[x][y][z] = true;
+			else
+				peer.session.map.voxeldata[x][y][z] = false;
+			
+			break;
+		
+		case 14: //Block line
+			//TODO: steal algorithm from secret facility
+			break;
+		
 		case 17: //Chat message
 			console.log(
 			( packet.data().readUInt8(2) === 0 ? "<GLOBAL>".bold.white 
 			: packet.data().readUInt8(2) === 1 ? "<TEAM>".bold.blue
 			: packet.data().readUInt8(2) === 2 ? "<SYSTEM>".bold.yellow
 			: "<?>" )
-			+ "\t" 
-			+ ("#" + packet.data().readUInt8(1) + ": ").bold
+			+ (typeof peer.session.players[packet.data().readUInt8(1)] != "undefined" ? peer.session.players[packet.data().readUInt8(1)].name : "")
+			+ "\t"
+			+ ("(#" + packet.data().readUInt8(1) + "): ").bold
 			+ packet.data().toString("cp437", 3)
 			);
 			
 			//TODO: Parse player ID into name.
-			
 			break;
+		
 		default: //Any packets that we've missed?
-			console.log(packet.data());
+			console.log("Incoming unknown packet "+ packet.data().readUInt8(0));
 			buf2hex(packet.data());
 			break;
 	}
