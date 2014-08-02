@@ -1,7 +1,7 @@
 /**
   * Generate a new array for our map that will hold all of our voxels.
 */
-function initVoxelArray(map) {
+module.exports.initVoxelArray = function initVoxelArray(map) {
 	map.voxeldata = new Array(512); //Make the x dimension so that we can loop through it and make the y and z dimensions
 	
 	for(var x=0; x < 512; x++) {
@@ -17,7 +17,7 @@ function initVoxelArray(map) {
   * Straight from http://silverspaceship.com/aosmap/aos_file_format.html
   * We don't want color. All color-related code snippets have been commented out for possible future use.
 */
-function loadMap(map) {
+module.exports.loadMap = function loadMap(map) {
 	var x,y,z,v = 0;
 	for (y=0; y < 512; ++y) {
 		for (x=0; x < 512; ++x) {
@@ -76,5 +76,3 @@ function loadMap(map) {
 	//assert(v-base == len);
 }
 
-module.exports.initVoxelArray = initVoxelArray;
-module.exports.loadMap = loadMap;

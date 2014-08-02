@@ -4,7 +4,7 @@ iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encod
 /**
   * Get team data from packet 15.
 */
-function getTeamData(game, packet) {
+module.exports.getTeamData = function getTeamData(game, packet) {
 	game.team1 = {
 		blue:	packet.data().readUInt8(5),
 		green:	packet.data().readUInt8(6),
@@ -23,7 +23,7 @@ function getTeamData(game, packet) {
 /**
   * Get data about CTF from packet 15, assuming that the gamemode is CTF.
 */
-function getCTFData(game, packet) {
+module.exports.getCTFData = function getCTFData(game, packet) {
 	game.state = {
 		gamemode: packet.data().readUInt8(31),
 		captureLimit: packet.data().readUInt8(34),
@@ -72,5 +72,45 @@ function getCTFData(game, packet) {
 	};
 }
 
-module.exports.getTeamData = getTeamData;
-module.exports.getCTFData = getCTFData;
+//Packet 23
+module.exports.intelCap = function intelCap(packet, session) {
+	var capper = session.players[packet.data().readUInt8(1)];
+			
+	console.log( 
+	((capper.name)[capper.team === 0 ? "blue" : "green"].bold)
+	+ " just captured the intel for " + session.game[capper.team === 0 ? "team1" : "team2"].name + "!" 
+	+ (packet.data().readUInt8(2) === 1 ? "(win)" : "") 
+	);
+}
+
+//Packet 24
+module.exports.intelPickup = function intelPickup(packet, session) {
+	var capper = session.players[packet.data().readUInt8(1)];
+	
+	console.log( 
+	((capper.name)[capper.team === 0 ? "blue" : "green"].bold)
+	+ " picked up the intel for " + session.game[capper.team === 0 ? "team1" : "team2"].name + "!"
+	);
+	
+	//Set intel position to the player id
+	session.game.state[capper.team === 0 ? "team1" : "team2"].intel = {
+		player: packet.data().readUInt8(1)
+	};
+}
+
+//Packet 25
+module.exports.intelDropped = function intelDropped(packet, session) {
+	var capper = session.players[packet.data().readUInt8(1)];
+	
+	console.log( 
+	((capper.name)[capper.team === 0 ? "blue" : "green"].bold)
+	+ " dropped the intel."
+	);
+	
+	//Set intel position according to packet
+	session.game.state[capper.team === 0 ? "team1" : "team2"].intel = {
+		x: packet.data().readInt32LE(2),
+		y: packet.data().readInt32LE(6),
+		z: packet.data().readInt32LE(10)
+	};
+}
