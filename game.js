@@ -1,5 +1,6 @@
 var iconv	= require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
 iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encoding cp437.
+var colors 	= require("colors");		//Colors!
 
 /**
   * Get team data from packet 15.

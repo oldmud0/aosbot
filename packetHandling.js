@@ -26,6 +26,12 @@ module.exports.mapStart = function mapStart(packet, peer) {
 	peer.session.map.currentlyGrabbing = true;
 	peer.session.joining = true;
 	
+	//Initialize our objects. It's imperative that we do it immediately in case we are sent something before we join successfully.
+	//Initialize player list. Note that an object declaration *may* be more efficient than an array declaration.
+	peer.session.players = {};
+	//Initialize game info object
+	peer.session.game = {};
+	
 	//Read the map size
 	peer.session.map.size = packet.data().readUInt32LE(1);
 	console.log("Map size: " + peer.session.map.size + " bytes.");
@@ -101,10 +107,6 @@ module.exports.gamemodeData = function gamemodeData(packet, peer) {
 	//Get game data
 	///////////////
 	
-	//Initialize game info object
-	if(peer.session.joining)
-		peer.session.game = {};
-	
 	//Construct fog and team objects
 	peer.session.game.fog = {
 		blue:	packet.data().readUInt8(2),
@@ -142,10 +144,6 @@ module.exports.gamemodeData = function gamemodeData(packet, peer) {
 		//////////////////
 		//Spawn the player
 		//////////////////
-			
-
-		//Initialize player list. Note that an object declaration *may* be more efficient than an array declaration.
-		peer.session.players = {};
 		
 		//Get our ID
 		peer.session.playerID = packet.data().readUInt8(1);
@@ -154,11 +152,11 @@ module.exports.gamemodeData = function gamemodeData(packet, peer) {
 		peer.session.players[peer.session.playerID] = {
 			weapon: 0,
 			team: 0,
-		//	pos: {
-		//		x: 0,
-		//		y: 0,
-		//		z: 0,
-		//	},
+			pos: {
+				x: 0,
+				y: 0,
+				z: 0,
+			},
 			heldItem: 0,
 			kills: 0
 		};
@@ -175,7 +173,7 @@ module.exports.gamemodeData = function gamemodeData(packet, peer) {
 		peer.session.getPlayer().name = "MyFirstBot";
 		
 		//Let's create an "existing player" packet and send it to the server. (Despite the name, this is our only way in.)
-		var newPlayerBuffer = new Buffer(29);
+		var newPlayerBuffer = new Buffer( new Array(28) ); //Making an array first helps zero out any stray values in memory.
 		
 		//Write the packet
 		newPlayerBuffer.writeUInt8(     9,                        0) ; //Packet #9
@@ -188,6 +186,7 @@ module.exports.gamemodeData = function gamemodeData(packet, peer) {
 		newPlayerBuffer.writeUInt8(     0,                        10); //(Green)
 		newPlayerBuffer.writeUInt8(     0,                        11); //(Red)
 		newPlayerBuffer.write(          peer.session.getPlayer().name, 12, 16, "cp437"); //Our name
+		newPlayerBuffer[27] = 0x0; //String must be null-terminated. We need to make sure our string ends in 0x0.
 		
 		peer.send(0, new enet.Packet(newPlayerBuffer, enet.Packet.FLAG_RELIABLE), function sendNewPlayerBufferCallback(err) {
 			if(err)
@@ -236,6 +235,8 @@ module.exports.restock = playerFuncs.restock;
 module.exports.killAction = playerFuncs.killAction;
 
 module.exports.playerLeft = playerFuncs.playerLeft;
+
+module.exports.setHealth = playerFuncs.setHealth;
 
 /**
   * Handle packet 13, which contains information about a block that has changed.

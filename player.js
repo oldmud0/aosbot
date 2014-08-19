@@ -1,3 +1,7 @@
+var iconv	= require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
+iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encoding cp437.
+var colors 	= require("colors");		//Colors!
+
 /**
   * Handle packet 12, which indicates that a player joined (after we've joined). Sent as a response to packet 9.
 */
@@ -12,6 +16,12 @@ module.exports.createPlayer = function createPlayer(packet, players) {
 		},
 		name: packet.data().toString("cp437", 13, 29),
 	});
+	
+	console.log(
+	players[packet.data().readUInt8(1)].team === 0 ? players[packet.data().readUInt8(1)].name.blue.bold :
+	players[packet.data().readUInt8(1)].team === 1 ? players[packet.data().readUInt8(1)].name.green.bold :
+	players[packet.data().readUInt8(1)].name.bold
+	+ " has joined the server.");
 }
 
 /**
@@ -34,7 +44,7 @@ module.exports.existingPlayer = function existingPlayer(packet, players) {
 }
 
 /**
-  * Handle packet 10, which describes a player in short form. This may be sent when a player switches teams or weapons.
+  * Handle packet 10, which describes a player in short form. (???)
 */
 module.exports.shortPlayerData = function shortPlayerData(packet, players) {
 	var id = packet.data().readUInt8(1);
@@ -171,3 +181,12 @@ module.exports.playerLeft = function playerLeft(packet, players) {
 	delete players[packet.data().readUInt8(1)]; //Delete vs null vs undefined? Who cares, they all just dereference.
 }
 
+/**
+  * Handle packet 5, which changes the bot's health due to damage taken.
+*/
+module.exports.setHealth = function setHealth(packet, player) {
+	player.hp = packet.readUInt8(1);
+	if(packet.readUInt8(2) === 1) {
+		//TODO: trigger something that will tell the bot that damage just occurred and tell the bot to pay attention to wherever it came from.
+	}
+}
