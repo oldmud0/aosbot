@@ -202,6 +202,10 @@ peer.on("message", function messageCallback(packet, channel) {
 			packetHandling.chatMessage(packet, peer.session.players);
 			break;
 		
+		case 5: //Set health
+			packetHandling.setHealth(packet, peer.session.player);
+			break;
+		
 		default: //Any packets that we've missed?
 			console.log("Incoming unknown packet "+ packet.data().readUInt8(0));
 			buf2hex(packet.data());

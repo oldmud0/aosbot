@@ -1,7 +1,7 @@
 var enet 	= require('enet');		//We need to send some packets back to the server
 var colors 	= require("colors");		//Colors!
 var ansi	= require("ansi")		//Carriage return doesn't seem to work, so why not
-	,cursor	= ansi(process.stdout);
+   ,cursor	= ansi(process.stdout);
 var merge	= require("merge");		//Merging two player objects together instead of overwriting them
 var zlib	= require("zlib");		//For inflating the map when we finish downloading it
 var iconv	= require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
