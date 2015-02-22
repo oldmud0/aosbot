@@ -1,6 +1,7 @@
 var iconv	= require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
 iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encoding cp437.
 var colors 	= require("colors");		//Colors!
+var merge	= require("merge");		//Merging two player objects together instead of overwriting them
 
 /**
   * Handle packet 12, which indicates that a player joined (after we've joined). Sent as a response to packet 9.
@@ -40,6 +41,8 @@ module.exports.existingPlayer = function existingPlayer(packet, players) {
 			r: packet.data().readUInt8(11)
 		},
 		name: packet.data().toString("cp437", 12, 29),
+		pos: {},
+		orient: {}
 	});
 }
 

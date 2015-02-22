@@ -155,7 +155,12 @@ module.exports.gamemodeData = function gamemodeData(packet, peer) {
 			pos: {
 				x: 0,
 				y: 0,
-				z: 0,
+				z: 0
+			},
+			orient: {
+				x: 0,
+				y: 0,
+				z: 0
 			},
 			heldItem: 0,
 			kills: 0

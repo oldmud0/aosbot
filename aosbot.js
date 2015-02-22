@@ -14,8 +14,8 @@ var mapFuncs	= require("./map");
 var gameFuncs	= require("./game");
 var packetHandling	= require("./packetHandling");
 
-var id = 16777343;
-var port = 51253;
+var id = 179929941;
+var port = 32887;
 
 var client, peer, serverAddr;
 
@@ -28,15 +28,15 @@ var client, peer, serverAddr;
 */
 function initClient() {
 	client = new enet.Host(new enet.Address('localhost', 0), 128, 1, 256000, 256000, "client");
-	client.start(17);
+	client.start(17); //17ms intervals
+	client.enableCompression(); //YES!! YES!!! COMPRESSION!!
 	console.log("ENet client initialized.");
 }
 
 /**
   * Connect to server.
-  * We can't connect to a server directly because the enet bindings that we're using
-  * don't support compression. So we have to use a sort of proxy server (generously donated by BR_)
-  * to send/receive the packets to/from the server for us.
+  * Previously we had to do this through a proxy generously donated by BR_, 
+  * but now that the enet bindings support compression, we can connect directly.
 */
 function connect(id, port) {
 	//Convert our URL to an IP address
