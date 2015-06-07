@@ -2,6 +2,9 @@
 ## Node.js
 #############
 
+# Notepad++ session data
+*.nppsession
+
 # Logs
 logs
 *.log

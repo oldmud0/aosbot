@@ -10,11 +10,14 @@ iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encod
 var mapFuncs	= require("./map");
 var gameFuncs	= require("./game");
 var playerFuncs	= require("./player");
+var mapServer	= require("./interface");
 
+
+module.exports = {
 /**
   * Handle packet 18, which signals map start (supports 0.75 only)
 */
-module.exports.mapStart = function mapStart(packet, peer) {
+mapStart: function mapStart(packet, peer) {
 	//If our compute hook/interval is still running, quick, unload it!
 	if(typeof peer.session.getPlayer != "undefined" && typeof peer.session.getPlayer().computeHook != "undefined") {
 		clearInterval(peer.session.getPlayer().computeHook);
@@ -39,12 +42,12 @@ module.exports.mapStart = function mapStart(packet, peer) {
 	//Create a temporary buffer to hold the map data as it's coming through
 	peer.session.map.dataRaw = new Buffer(peer.session.map.size);
 	peer.session.map.progress = 0;
-}
+},
 
 /**
   * Handle packet 19, which carries a chunk of the map
 */
-module.exports.mapData = function mapData(packet, peer) {
+mapData: function mapData(packet, peer) {
 	//Copy packet data (except the packet ID) to the map data
 	packet.data().copy(peer.session.map.dataRaw, peer.session.map.progress, 1);
 	
@@ -53,16 +56,17 @@ module.exports.mapData = function mapData(packet, peer) {
 	
 	//Show our current progress. However, we don't want to slow down the download by waiting for the console, so we'll write back every few bytes.
 	if( Math.round(peer.session.map.progress % 30000 * 0.001) === 0) {
-		process.stdout.write(peer.session.map.progress + "/" + peer.session.map.size);
+		//process.stdout.write(peer.session.map.progress + "/" + peer.session.map.size);
+		process.stdout.write(peer.session.map.progress.toString(16) + "/" + peer.session.map.size.toString(16));
 		cursor.horizontalAbsolute(0);
 	}
-}
+},
 
 /**
   * Handle packet 15, which is gamemode data. This also signals when the map download process has completed.
   * Packet 9 is also sent to the server to spawn the bot.
 */
-module.exports.gamemodeData = function gamemodeData(packet, peer) {
+gamemodeData: function gamemodeData(packet, peer) {
 	//If we're downloading a map and we just got packet 15, stop downloading and process the map
 	if(peer.session.map.currentlyGrabbing === true) {
 		peer.session.map.currentlyGrabbing = false;
@@ -99,7 +103,14 @@ module.exports.gamemodeData = function gamemodeData(packet, peer) {
 			mapFuncs.loadMap(peer.session.map);
 			console.log("RLE decode complete.");
 			
+			//We don't need the zlib'd info anymore. Destroy it.
+			delete peer.session.map.data;
+
 			console.log("--- Map load complete ---".bold.yellow.cyanBG);
+
+			//Marks the end of the joining process
+			peer.session.joining = false;
+			mapServer.startMapServer(peer.session.map.voxeldata);
 		});
 	}
 	
@@ -204,49 +215,48 @@ module.exports.gamemodeData = function gamemodeData(packet, peer) {
 		//Load compute hook. We can unload it at any time.
 		//peer.session.players.computeHook = setInterval(botCompute, 50);
 		
-		//Marks the end of the joining process
-		peer.session.joining = false;
+		//But wait! we still need to wait on the decode callback. So we will stop joining once that is finished.
 	}
-}
+},
 
 //Intel funcs (link to game.js)
-module.exports.intelCap = gameFuncs.intelCap;
+intelCap: gameFuncs.intelCap,
 
-module.exports.intelPickup = gameFuncs.intelPickup;
+intelPickup: gameFuncs.intelPickup,
 
-module.exports.intelDropped = gameFuncs.intelDropped;
+intelDropped: gameFuncs.intelDropped,
 
 //Player funcs (link to player.js)
-module.exports.createPlayer = playerFuncs.createPlayer;
+createPlayer: playerFuncs.createPlayer,
 
-module.exports.existingPlayer = playerFuncs.existingPlayer;
+existingPlayer: playerFuncs.existingPlayer,
 
-module.exports.shortPlayerData = playerFuncs.shortPlayerData;
+shortPlayerData: playerFuncs.shortPlayerData,
 
-module.exports.selfPosition = playerFuncs.selfPosition;
+selfPosition: playerFuncs.selfPosition,
 
-module.exports.playerPositions = playerFuncs.playerPositions;
+playerPositions: playerFuncs.playerPositions,
 
-module.exports.teamChange = playerFuncs.teamChange;
+teamChange: playerFuncs.teamChange,
 
-module.exports.weaponChange = playerFuncs.weaponChange;
+weaponChange: playerFuncs.weaponChange,
 
-module.exports.setTool = playerFuncs.setTool;
+setTool: playerFuncs.setTool,
 
-module.exports.setBlockColor = playerFuncs.setBlockColor;
+setBlockColor: playerFuncs.setBlockColor,
 
-module.exports.restock = playerFuncs.restock;
+restock: playerFuncs.restock,
 
-module.exports.killAction = playerFuncs.killAction;
+killAction: playerFuncs.killAction,
 
-module.exports.playerLeft = playerFuncs.playerLeft;
+playerLeft: playerFuncs.playerLeft,
 
-module.exports.setHealth = playerFuncs.setHealth;
+setHealth: playerFuncs.setHealth,
 
 /**
   * Handle packet 13, which contains information about a block that has changed.
 */
-module.exports.blockAction = function blockAction(packet, map) {
+blockAction: function blockAction(packet, map) {
 	var action = {
 		type: packet.data().readUInt8(2), //0 = build, 1 = bullet, 2 = spade, 3 = grenade
 		x: packet.data().readInt32LE(3),
@@ -255,15 +265,15 @@ module.exports.blockAction = function blockAction(packet, map) {
 	};
 	
 	if(action.type === 0)
-		map.voxeldata[x][y][z] = true;
+		map.voxeldata[action.x][action.y][action.z] = 1;
 	else
-		map.voxeldata[x][y][z] = false;
-}
+		map.voxeldata[action.x][action.y][action.z] = 0;
+},
 
 /**
   * Handle packet 17, which is a chat message.
 */
-module.exports.chatMessage = function chatMessage(packet, players) {
+chatMessage: function chatMessage(packet, players) {
 	console.log(
 		( packet.data().readUInt8(2) === 0 ? "<GLOBAL>".bold.white 
 		: packet.data().readUInt8(2) === 1 ? "<TEAM>".bold.blue
@@ -274,5 +284,6 @@ module.exports.chatMessage = function chatMessage(packet, players) {
 		+ ("(#" + packet.data().readUInt8(1) + "): ").bold
 		+ packet.data().toString("cp437", 3)
 	);
+}
 }
 

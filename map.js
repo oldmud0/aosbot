@@ -1,7 +1,8 @@
+module.exports = {
 /**
   * Generate a new array for our map that will hold all of our voxels.
 */
-module.exports.initVoxelArray = function initVoxelArray(map) {
+initVoxelArray: function initVoxelArray(map) {
 	map.voxeldata = new Array(512); //Make the x dimension so that we can loop through it and make the y and z dimensions
 	
 	for(var x=0; x < 512; x++) {
@@ -9,7 +10,7 @@ module.exports.initVoxelArray = function initVoxelArray(map) {
 		for(var y=0; y < 512; y++)
 			map.voxeldata[x][y] = new Array(64); //Make the z dimension
 	}
-}
+},
 
 /**
   * Decode the RLE which the map is wrapped under.
@@ -17,12 +18,12 @@ module.exports.initVoxelArray = function initVoxelArray(map) {
   * Straight from http://silverspaceship.com/aosmap/aos_file_format.html
   * We don't want color. All color-related code snippets have been commented out for possible future use.
 */
-module.exports.loadMap = function loadMap(map) {
+loadMap: function loadMap(map) {
 	var x,y,z,v = 0;
 	for (y=0; y < 512; ++y) {
 		for (x=0; x < 512; ++x) {
 			for (z=0; z < 64; ++z) {
-				map.voxeldata[x][y][z] = true;
+				map.voxeldata[x][y][z] = 1;
 				
 				//cursor.horizontalAbsolute(0).write("Decoding RLE from map... ("+x+","+y+","+z+")");
 			}
@@ -39,7 +40,7 @@ module.exports.loadMap = function loadMap(map) {
 				var len_bottom;
 
 				for(i=z; i < top_color_start; i++)
-					map.voxeldata[x][y][i] = false;
+					map.voxeldata[x][y][i] = 0;
 
 				//color = (uint32 *) (v+4);
 				//for(z=top_color_start; z <= top_color_end; z++)
@@ -75,4 +76,4 @@ module.exports.loadMap = function loadMap(map) {
 	}
 	//assert(v-base == len);
 }
-
+}

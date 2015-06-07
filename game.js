@@ -2,10 +2,11 @@ var iconv	= require("iconv-lite");	//For converting our CP437 string to whatever
 iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encoding cp437.
 var colors 	= require("colors");		//Colors!
 
+module.exports = {
 /**
   * Get team data from packet 15.
 */
-module.exports.getTeamData = function getTeamData(game, packet) {
+getTeamData: function getTeamData(game, packet) {
 	game.team1 = {
 		blue:	packet.data().readUInt8(5),
 		green:	packet.data().readUInt8(6),
@@ -19,12 +20,12 @@ module.exports.getTeamData = function getTeamData(game, packet) {
 		red:	packet.data().readUInt8(10),
 		name:	packet.data().toString("cp437", 22, 31)
 	}
-}
+},
 
 /**
   * Get data about CTF from packet 15, assuming that the gamemode is CTF.
 */
-module.exports.getCTFData = function getCTFData(game, packet) {
+getCTFData: function getCTFData(game, packet) {
 	game.state = {
 		gamemode: packet.data().readUInt8(31),
 		captureLimit: packet.data().readUInt8(34),
@@ -71,10 +72,10 @@ module.exports.getCTFData = function getCTFData(game, packet) {
 			}
 		}
 	};
-}
+},
 
 //Packet 23
-module.exports.intelCap = function intelCap(packet, session) {
+intelCap: function intelCap(packet, session) {
 	var capper = session.players[packet.data().readUInt8(1)];
 			
 	console.log( 
@@ -82,10 +83,10 @@ module.exports.intelCap = function intelCap(packet, session) {
 	+ " just captured the intel for " + session.game[capper.team === 0 ? "team1" : "team2"].name + "!" 
 	+ (packet.data().readUInt8(2) === 1 ? "(win)" : "") 
 	);
-}
+},
 
 //Packet 24
-module.exports.intelPickup = function intelPickup(packet, session) {
+intelPickup: function intelPickup(packet, session) {
 	var capper = session.players[packet.data().readUInt8(1)];
 	
 	console.log( 
@@ -97,10 +98,10 @@ module.exports.intelPickup = function intelPickup(packet, session) {
 	session.game.state[capper.team === 0 ? "team1" : "team2"].intel = {
 		player: packet.data().readUInt8(1)
 	};
-}
+},
 
 //Packet 25
-module.exports.intelDropped = function intelDropped(packet, session) {
+intelDropped: function intelDropped(packet, session) {
 	var capper = session.players[packet.data().readUInt8(1)];
 	
 	console.log( 
@@ -114,4 +115,5 @@ module.exports.intelDropped = function intelDropped(packet, session) {
 		y: packet.data().readInt32LE(6),
 		z: packet.data().readInt32LE(10)
 	};
+}
 }

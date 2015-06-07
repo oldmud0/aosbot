@@ -14,8 +14,8 @@ var mapFuncs	= require("./map");
 var gameFuncs	= require("./game");
 var packetHandling	= require("./packetHandling");
 
-var id = 179929941;
-var port = 32887;
+var id = 2972363091;
+var port = 32888;
 
 var client, peer, serverAddr;
 
@@ -42,7 +42,7 @@ function connect(id, port) {
 	//Convert our URL to an IP address
 	var serverIP = [ id & 0xFF, (id >> 8) & 0xFF, (id >> 16) & 0xFF, (id >> 24) & 0xFF ].join('.');
 	serverAddr = new enet.Address(serverIP, port);
-	serverAddr.hostToString = function(){return [ serverAddr._host & 0xFF, (serverAddr._host >> 8) & 0xFF, (serverAddr._host >> 16) & 0xFF, (serverAddr._host >> 24) & 0xFF ].join('.');}
+	serverAddr.hostToString = function(){return [ serverAddr._host & 0xFF, (serverAddr._host >> 8) & 0xFF, (serverAddr._host >> 16) & 0xFF, (serverAddr._host >> 24) & 0xFF ].join('.');};
 	console.log("Got server address.");
 	
 	//Establish connection to our server
@@ -58,6 +58,7 @@ function connect(id, port) {
 			}
 		}
 	);
+	global.peer = peer;
 }
 
 initClient();
@@ -69,147 +70,104 @@ peer.on("connect", function connectCallback() {
 	peer.ping();
 	
 	peer.session = {};
+	peer.session.packetQueue = [];
 });
+
+var packetArgs = {
+	NONE: 0,
+	PACKET_PEER: 1,         //packet, peer
+	PACKET_SESSION: 2,      //packet, peer.session
+	PACKET_PLAYERS: 3,      //packet, peer.session.players
+	PACKET_SELF: 4,         //packet, peer.session.getPlayer()
+	PACKET_MAP: 5,          //packet, peer.session.map
+	PACKET_SELF_PLAYERS: 6  //packet, peer.session.getPlayer(), peer.session.players
+}
+
+//Basically a jump table to clear up the big switch/case that we had earlier.
+//function {} = no-op.
+var packetList = {
+	"18": [packetHandling.mapStart,     packetArgs.PACKET_PEER],     //Client join or map change
+	"19": [packetHandling.mapData,      packetArgs.PACKET_PEER],     //Map data packet
+	//Gamemode-related packets
+	"15": [packetHandling.gamemodeData, packetArgs.PACKET_PEER],     //Gamemode data
+	                                                                 //(We can also use it as a way to tell us when to
+	                                                                 //stop downloading the map.)
+	"23": [packetHandling.intelCap,     packetArgs.PACKET_SESSION],  //Intel capture
+	"24": [packetHandling.intelPickup,  packetArgs.PACKET_SESSION],  //Intel pickup
+	"25": [packetHandling.intelDropped, packetArgs.PACKET_SESSION],  //Intel dropped
+	"21": [function() {return;},        packetArgs.NONE],            //Territory captured (nobody plays TC anymore :( )
+	"22": [function() {return;},        packetArgs.NONE],            //Territory capture progress bar
+	//Player-related packets
+
+	//Create player (as response to the packet #9 that we sent).
+	//Sent when a player joins after we've joined as opposed to packet #9 below.
+	"12": [packetHandling.createPlayer,       packetArgs.PACKET_PLAYERS],
+	"9":  [packetHandling.existingPlayer,     packetArgs.PACKET_PLAYERS],
+	"10": [packetHandling.shortPlayerData,    packetArgs.PACKET_PLAYERS],
+	"0":  [packetHandling.selfPosition,       packetArgs.PACKET_SELF],     //Our own position, sent back from the server
+	"2":  [packetHandling.playerPositions,    packetArgs.PACKET_PLAYERS],
+	"29": [packetHandling.teamChange,         packetArgs.PACKET_SESSION],
+	"30": [packetHandling.weaponChange,       packetArgs.PACKET_PLAYERS],
+	"7":  [packetHandling.setTool,            packetArgs.PACKET_PLAYERS],
+	"8":  [packetHandling.setBlockColor,      packetArgs.PACKET_PLAYERS],
+	"3":  [function() {return;},              packetArgs.NONE],            //Input data (not planning to read controller)
+	"4":  [function() {return;},              packetArgs.NONE],            //Weapon fire
+	"28": [function() {return;},              packetArgs.NONE],            //Weapon reload
+	"26": [packetHandling.restock,            packetArgs.PACKET_SELF],     //Restock. If it's us, resupply everything. If not, we don't really care.
+	"27": [function() {return;},              packetArgs.NONE],            //Fog color
+	"16": [packetHandling.killAction,         packetArgs.PACKET_SELF_PLAYERS], //For printing out killfeed.
+	"20": [packetHandling.playerLeft,         packetArgs.PACKET_PLAYERS],
+	"13": [packetHandling.blockAction,        packetArgs.PACKET_MAP],
+	"14": [function() {return;},              packetArgs.NONE],            //Block line. We need the *exact* line algorithm for us to do this correctly. (PySnip code)
+	"17": [packetHandling.chatMessage,        packetArgs.PACKET_PLAYERS],
+	"5":  [packetHandling.setHealth,          packetArgs.PACKET_SELF]
+}
 
 peer.on("message", function messageCallback(packet, channel) {
 	packetID = packet.data().readUInt8(0);
 	
-	//Event based package handling (terrible)
-	switch(packetID) {
-		case 18: //Client join or map change
-			packetHandling.mapStart(packet, peer);
-			break;
-		
-		case 19: //Map data packet
-			packetHandling.mapData(packet, peer);
-			break;
-			
-		//////////////////////////
-		//Gamemode-related packets
-		//////////////////////////
-		//{
-		
-		case 15: //Gamemode data
-			//We can also use it as a way to tell us when to stop downloading the map.
-			packetHandling.gamemodeData(packet, peer);
-			break;
-		
-		case 23: //Intel capture
-			packetHandling.intelCap(packet, peer.session);
-			break;
-		
-		case 24: //Intel pickup
-			packetHandling.intelPickup(packet, peer.session);
-			break;
-		
-		case 25: //Intel dropped
-			packetHandling.intelDropped(packet, peer.session);
-			break;
-		
-		case 21: //Territory captured
-			//nobody plays TC anymore :(
-			break;
-		
-		case 22: //TC progress bar
-			//no-op
-			break;
-		
-		//}
-			
-		////////////////////////
-		//Player-related packets 
-		////////////////////////
-		//{
-		
-		case 12: //Create player (as response to the packet #9 that we sent). Sent when a player joins after we've joined as opposed to packet #9 below.
-			packetHandling.createPlayer(packet, peer.session.players);
-			break;
-		
-		case 9: //Existing player. Sent when we join while there are players online.
-			packetHandling.existingPlayer(packet, peer.session.players);
-			break;
-		
-		case 10: //Short player data. Used when player switches teams or weapon.
-			packetHandling.shortPlayerData(packet, peer.session.players);
-			break;
-			
-		case 0: //Our own position, sent back from the server
-			packetHandling.selfPosition(packet, peer.session.getPlayer());
-			break;
-		
-		case 2: //Player positions. 0.76 does a lot nicer job in doing this, but right now we are only working with 0.75 data.
-			packetHandling.playerPositions(packet, peer.session.players);
-			break;
-		
-		case 29: //Change team
-			packetHandling.teamChange(packet, peer.session);
-			break;
-			
-		case 30: //Change weapon
-			packetHandling.weaponChange(packet, peer.session.players);
-			break;
-		
-		case 7: //Set player's currently equipped tool
-			packetHandling.setTool(packet, peer.session.players);
-			break;
-		
-		case 8: //Set player's block color
-			packetHandling.setBlockColor(packet, peer.session.players);
-			break;
-			
-		case 3: //Input data
-			//no-op for now
-			break;
-			
-		case 4: //Weapon fire
-			//no-op for now
-			break;
-			
-		case 28: //Weapon reload
-			//no-op for now
-			break;
-		
-		case 26: //Restock
-			//If it's us, resupply everything. If not, we don't care.
-			packetHandling.restock(packet, peer.session.getPlayer());
-			break;
-		
-		case 27: //Fog color
-			//We don't really care about fog
-			//no-op
-			break;
-			
-		case 16: //Kill action
-			//If it was our bot, print it out. If not, don't do anything.
-			packetHandling.killAction(packet, peer.session.getPlayer(), peer.session.players);
-			break;
-		
-		case 20: //Player leaves
-			packetHandling.playerLeft(packet, peer.session.players);
-			break;
-			
-		//}
-		
-		case 13: //Block action
-			packetHandling.blockAction(packet, peer.session.map);
-			break;
-		
-		case 14: //Block line
-			//TODO: steal algorithm from secret facility
-			break;
-		
-		case 17: //Chat message
-			packetHandling.chatMessage(packet, peer.session.players);
-			break;
-		
-		case 5: //Set health
-			packetHandling.setHealth(packet, peer.session.player);
-			break;
-		
-		default: //Any packets that we've missed?
-			console.log("Incoming unknown packet "+ packet.data().readUInt8(0));
-			buf2hex(packet.data());
-			break;
+	//If we are joining and this is not a critical packet, put it in the queue and we will look at it later.
+	if(peer.session.joining && !(packetID === 18 || packetID === 19 || packetID === 15)) {
+		peer.session.packetQueue.push(packet);
+		return;
+	}
+
+	//If we just finished joining and the packet queue is not empty, let's run some recursion to handle each one.
+	if(!peer.session.joining && peer.session.packetQueue.length != 0)
+		messageCallback(peer.session.packetQueue.shift(), channel);
+
+	//Use above jump table to handle packets by event.
+	if(packetID in packetList) {
+		var packetEvent = packetList[packetID];
+
+		//Determine what arguments we're supposed to pass.
+		//I mean we could just have every packet event have a uniform number of arguments but that would be tedious.
+		switch(packetEvent[1]) {
+			case packetArgs.NONE:
+				packetEvent[0]();
+				break;
+			case packetArgs.PACKET_PEER:
+				packetEvent[0](packet, peer);
+				break;
+			case packetArgs.PACKET_SESSION:
+				packetEvent[0](packet, peer.session);
+				break;
+			case packetArgs.PACKET_PLAYERS:
+				packetEvent[0](packet, peer.session.players);
+				break;
+			case packetArgs.PACKET_SELF:
+				packetEvent[0](packet, peer.session.getPlayer());
+				break;
+			case packetArgs.PACKET_MAP:
+				packetEvent[0](packet, peer.session.map);
+				break;
+			case packetArgs.PACKET_SELF_PLAYERS:
+				packetEvent[0](packet, peer.session.getPlayer(), peer.session.players);
+				break;
+		}
+	} else { //Any packets that we've missed?
+		console.log("Incoming unknown packet "+ packet.data().readUInt8(0));
+		buf2hex(packet.data());
 	}
 });
 
@@ -219,8 +177,12 @@ peer.on("disconnect", function disconnectCallback() {
 	client.stop();
 });
 
+process.on('uncaughtException', function (error) {
+   console.log(error.stack);
+});
+
 function botCompute() {
-	if(typeof peer.session.getPlayer().pos != "undefined" && peer.session.getPlayer().alive) {
+	if(typeof peer.session.getPlayer().pos !== "undefined" && peer.session.getPlayer().alive) {
 		var inputBuffer = new Buffer(3);
 		inputBuffer.writeUInt8(3,0); //ID is 3
 		inputBuffer.writeUInt8(peer.session.getPlayer().id,1); //Player ID
