@@ -1,21 +1,21 @@
 //npm dependencies
-var enet 	= require('enet');		//Connecting to the server, obviously
-var buf2hex 	= require("hex");		//Packet analysis
-var colors 	= require("colors");		//Colors!
-var ansi	= require("ansi")		//Carriage return doesn't seem to work, so why not
-   ,cursor	= ansi(process.stdout);
-var zlib	= require("zlib");		//For inflating the map when we finish downloading it
-var iconv	= require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
-iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encoding cp437.
-var merge	= require("merge");		//Merging two player objects together instead of overwriting them
+var enet    = require('enet');        //Connecting to the server, obviously
+var buf2hex = require("hex");         //Packet analysis
+var colors  = require("colors");      //Colors!
+var ansi    = require("ansi")         //Carriage return doesn't seem to work, so why not
+   ,cursor  = ansi(process.stdout);
+var zlib    = require("zlib");        //For inflating the map when we finish downloading it
+var iconv   = require("iconv-lite");  //For converting our CP437 string to whatever encoding node uses
+iconv.extendNodeEncodings();          //Now we can use Buffer.toString() with the encoding cp437.
+var merge   = require("merge");       //Merging two player objects together instead of overwriting them
 
 //Local files
-var mapFuncs	= require("./map");
-var gameFuncs	= require("./game");
-var packetHandling	= require("./packetHandling");
+var mapFuncs        = require("./map");
+var gameFuncs       = require("./packets_game");
+var packetHandling  = require("./packetHandling");
 
-var id = 2972363091;
-var port = 32888;
+var id = 3855533061;
+var port = 32887;
 
 var client, peer, serverAddr;
 
@@ -110,32 +110,38 @@ var packetList = {
 	"30": [packetHandling.weaponChange,       packetArgs.PACKET_PLAYERS],
 	"7":  [packetHandling.setTool,            packetArgs.PACKET_PLAYERS],
 	"8":  [packetHandling.setBlockColor,      packetArgs.PACKET_PLAYERS],
-	"3":  [function() {return;},              packetArgs.NONE],            //Input data (not planning to read controller)
-	"4":  [function() {return;},              packetArgs.NONE],            //Weapon fire
-	"28": [function() {return;},              packetArgs.NONE],            //Weapon reload
+	"3":  [packetHandling.inputData,          packetArgs.PACKET_PLAYERS],  //Input data
+	"4":  [packetHandling.weaponInput,        packetArgs.PACKET_PLAYERS],  //Weapon fire
+	"28": [packetHandling.weaponReload,       packetArgs.PACKET_PLAYERS],  //Weapon reload
 	"26": [packetHandling.restock,            packetArgs.PACKET_SELF],     //Restock. If it's us, resupply everything. If not, we don't really care.
 	"27": [function() {return;},              packetArgs.NONE],            //Fog color
 	"16": [packetHandling.killAction,         packetArgs.PACKET_SELF_PLAYERS], //For printing out killfeed.
 	"20": [packetHandling.playerLeft,         packetArgs.PACKET_PLAYERS],
 	"13": [packetHandling.blockAction,        packetArgs.PACKET_MAP],
-	"14": [function() {return;},              packetArgs.NONE],            //Block line. We need the *exact* line algorithm for us to do this correctly. (PySnip code)
+	"14": [packetHandling.blockLine,          packetArgs.PACKET_MAP],      //Block line. We need the *exact* line algorithm for us to do this correctly. (PySnip code)
 	"17": [packetHandling.chatMessage,        packetArgs.PACKET_PLAYERS],
-	"5":  [packetHandling.setHealth,          packetArgs.PACKET_SELF]
+	"5":  [packetHandling.setHealth,          packetArgs.PACKET_SELF],
+	"6":  [packetHandling.spawnGrenade,       packetArgs.PACKET_MAP]
 }
 
 peer.on("message", function messageCallback(packet, channel) {
 	packetID = packet.data().readUInt8(0);
 	
-	//If we are joining and this is not a critical packet, put it in the queue and we will look at it later.
-	if(peer.session.joining && !(packetID === 18 || packetID === 19 || packetID === 15)) {
-		peer.session.packetQueue.push(packet);
-		return;
+	if(typeof peer.session.map !== "undefined") {
+		//If the map is decompressing, throw the block action packets into a queue.
+		if(peer.session.map.decompressing && packetID === 13) {
+			//We have to copy the packet data since the packet object itself is bound by pointer to the callback.
+			peer.session.packetQueue.push(new enet.Packet(packet.data()));
+			return;
+		}
+
+		//If we just finished decompressing the map and the packet queue is not empty, let's run some recursion to handle each one.
+		if(!peer.session.map.decompressing && peer.session.packetQueue.length !== 0) {
+			var pop = peer.session.packetQueue.shift();
+			messageCallback(pop, channel);
+		}
 	}
-
-	//If we just finished joining and the packet queue is not empty, let's run some recursion to handle each one.
-	if(!peer.session.joining && peer.session.packetQueue.length != 0)
-		messageCallback(peer.session.packetQueue.shift(), channel);
-
+	
 	//Use above jump table to handle packets by event.
 	if(packetID in packetList) {
 		var packetEvent = packetList[packetID];
@@ -173,7 +179,7 @@ peer.on("message", function messageCallback(packet, channel) {
 
 peer.on("disconnect", function disconnectCallback() {
 	//Disconnected
-	console.log("dang it");
+	console.log("DISCONNECTED".bold.red.bgWhite);
 	client.stop();
 });
 

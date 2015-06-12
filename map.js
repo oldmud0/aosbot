@@ -7,8 +7,11 @@ initVoxelArray: function initVoxelArray(map) {
 	
 	for(var x=0; x < 512; x++) {
 		map.voxeldata[x] = new Array(512);           //Make the y dimension
-		for(var y=0; y < 512; y++)
+		for(var y=0; y < 512; y++) {
 			map.voxeldata[x][y] = new Array(64); //Make the z dimension
+			for(var z=0; z < 64; z++)
+				map.voxeldata[x][y][z] = 0;
+		}
 	}
 },
 

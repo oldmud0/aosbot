@@ -1,17 +1,19 @@
-var enet 	= require('enet');		//We need to send some packets back to the server
-var colors 	= require("colors");		//Colors!
-var ansi	= require("ansi")		//Carriage return doesn't seem to work, so why not
-   ,cursor	= ansi(process.stdout);
-var merge	= require("merge");		//Merging two player objects together instead of overwriting them
-var zlib	= require("zlib");		//For inflating the map when we finish downloading it
-var iconv	= require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
+var enet    = require('enet');		//We need to send some packets back to the server
+var colors  = require("colors");		//Colors!
+var ansi    = require("ansi")		//Carriage return doesn't seem to work, so why not
+   ,cursor  = ansi(process.stdout);
+var merge   = require("merge");		//Merging two player objects together instead of overwriting them
+var zlib    = require("zlib");		//For inflating the map when we finish downloading it
+var iconv   = require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
 iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encoding cp437.
+var buf2hex = require("hex");
 
-var mapFuncs	= require("./map");
-var gameFuncs	= require("./game");
-var playerFuncs	= require("./player");
-var mapServer	= require("./interface");
-
+var mapFuncs      = require("./map");
+var gameFuncs     = require("./packets_game");
+var playerFuncs   = require("./packets_player");
+var mapServer     = require("./interface");
+var Player        = require("./player").Player;
+var OwnPlayer     = require("./player").OwnPlayer;
 
 module.exports = {
 /**
@@ -27,11 +29,14 @@ mapStart: function mapStart(packet, peer) {
 	console.log("--- Map start ---".bold.yellow.cyanBG);
 	peer.session.map = {};
 	peer.session.map.currentlyGrabbing = true;
+	peer.session.map.decompressing = false;
 	peer.session.joining = true;
 	
 	//Initialize our objects. It's imperative that we do it immediately in case we are sent something before we join successfully.
 	//Initialize player list. Note that an object declaration *may* be more efficient than an array declaration.
-	peer.session.players = {};
+	peer.session.players = new Array(36);
+	for(var i = 0; i < peer.session.players.length; i++)
+		peer.session.players[i] = new Player(i);
 	//Initialize game info object
 	peer.session.game = {};
 	
@@ -76,6 +81,7 @@ gamemodeData: function gamemodeData(packet, peer) {
 		//Let's decompress this map! :D
 		///////////////////////////////
 		cursor.horizontalAbsolute(0).write("Decompressing map...")
+		peer.session.map.decompressing = true;
 		var err = zlib.inflate(peer.session.map.dataRaw, function inflateMapCallback(err, result) {
 			
 			//If we got an error, print it out and stop
@@ -107,12 +113,58 @@ gamemodeData: function gamemodeData(packet, peer) {
 			delete peer.session.map.data;
 
 			console.log("--- Map load complete ---".bold.yellow.cyanBG);
-
+			peer.session.map.decompressing = false;
+			
+			//////////////////
+			//Spawn the player
+			//////////////////
+			
+			//Let's create an "existing player" packet and send it to the server. (Despite the name, this is our only way in.)
+			var newPlayerBuffer = new Buffer( new Array(28) ); //Making an array first helps zero out any stray values in memory.
+			
+			//Write the packet
+			newPlayerBuffer.writeUInt8(     9,                        0) ; //Packet #9
+			newPlayerBuffer.writeUInt8(     peer.session.getPlayer().id,   1);  //Player ID. Server probably doesn't care about it.
+			newPlayerBuffer.writeInt8(      0,                        2);  //What team to choose? Who cares since the server will probably balance us. (-1 = spec, 0 = team1, 1 = team2)
+			newPlayerBuffer.writeUInt8(     0,                        3);  //(0 = rifle, 1 = smg, 2 = shotgun)
+			newPlayerBuffer.writeUInt8(     0,                        4);  //Held item; discarded by server. Only used server -> client. (0 = spade, 1 = block, 2 = gun, 3 = grenade)
+			newPlayerBuffer.writeUInt32LE(  0,                        5);  //Kills; also discarded by server.
+			newPlayerBuffer.writeUInt8(     0,                        9);  //Block color. Again, discarded by server. (Blue)
+			newPlayerBuffer.writeUInt8(     0,                        10); //(Green)
+			newPlayerBuffer.writeUInt8(     0,                        11); //(Red)
+			newPlayerBuffer.write(          peer.session.getPlayer().name, 12, 16, "cp437"); //Our name
+			newPlayerBuffer[27] = 0x0; //String must be null-terminated. We need to make sure our string ends in 0x0.
+			
+			peer.send(0, new enet.Packet(newPlayerBuffer, enet.Packet.FLAG_RELIABLE), function sendNewPlayerBufferCallback(err) {
+				if(err)
+					console.error( ("ERROR: " + err).bold.yellow.redBG );
+				else
+					console.log("We have a bot on ground.".bold.yellow.cyanBG);
+					peer.session.getPlayer().alive = true;
+			});
+			
+			//Load compute hook. We can unload it at any time.
+			//peer.session.players.computeHook = setInterval(botCompute, 50);
+			
 			//Marks the end of the joining process
 			peer.session.joining = false;
 			mapServer.startMapServer(peer.session.map.voxeldata);
 		});
 	}
+	
+	//Get our ID
+	peer.session.playerID = packet.data().readUInt8(1);
+	
+	peer.session.players[peer.session.playerID] = new OwnPlayer(peer.session.playerID);
+	
+	peer.session.getPlayer = function getPlayer() {
+		return peer.session.players[peer.session.playerID];
+	}
+	
+	console.log( "ID is " + (peer.session.getPlayer().id.toString()).bold );
+	
+	//Set our name
+	peer.session.getPlayer().name = "MyFirstBot";
 	
 	///////////////
 	//Get game data
@@ -120,9 +172,9 @@ gamemodeData: function gamemodeData(packet, peer) {
 	
 	//Construct fog and team objects
 	peer.session.game.fog = {
-		blue:	packet.data().readUInt8(2),
-		green:	packet.data().readUInt8(3),
-		red:	packet.data().readUInt8(4)
+		blue:  packet.data().readUInt8(2),
+		green: packet.data().readUInt8(3),
+		red:   packet.data().readUInt8(4)
 	};
 	
 	gameFuncs.getTeamData(peer.session.game, packet);
@@ -151,112 +203,41 @@ gamemodeData: function gamemodeData(packet, peer) {
 		};
 	}
 	
-	if(peer.session.joining) {
-		//////////////////
-		//Spawn the player
-		//////////////////
-		
-		//Get our ID
-		peer.session.playerID = packet.data().readUInt8(1);
-		
-		//Create our player object as well as getPlayer()
-		peer.session.players[peer.session.playerID] = {
-			weapon: 0,
-			team: 0,
-			pos: {
-				x: 0,
-				y: 0,
-				z: 0
-			},
-			orient: {
-				x: 0,
-				y: 0,
-				z: 0
-			},
-			heldItem: 0,
-			kills: 0
-		};
-		
-		peer.session.getPlayer = function getPlayer() {
-			return peer.session.players[peer.session.playerID];
-		}
-		
-		peer.session.getPlayer().id = peer.session.playerID;
-		
-		console.log( "ID is " + (peer.session.getPlayer().id.toString()).bold );
-		
-		//Set our name
-		peer.session.getPlayer().name = "MyFirstBot";
-		
-		//Let's create an "existing player" packet and send it to the server. (Despite the name, this is our only way in.)
-		var newPlayerBuffer = new Buffer( new Array(28) ); //Making an array first helps zero out any stray values in memory.
-		
-		//Write the packet
-		newPlayerBuffer.writeUInt8(     9,                        0) ; //Packet #9
-		newPlayerBuffer.writeUInt8(     peer.session.getPlayer().id,   1);  //Player ID. Server probably doesn't care about it.
-		newPlayerBuffer.writeInt8(      0,                        2);  //What team to choose? Who cares since the server will probably balance us. (-1 = spec, 0 = team1, 1 = team2)
-		newPlayerBuffer.writeUInt8(     0,                        3);  //(0 = rifle, 1 = smg, 2 = shotgun)
-		newPlayerBuffer.writeUInt8(     0,                        4);  //Held item; discarded by server. Only used server -> client. (0 = spade, 1 = block, 2 = gun, 3 = grenade)
-		newPlayerBuffer.writeUInt32LE(  0,                        5);  //Kills; also discarded by server.
-		newPlayerBuffer.writeUInt8(     0,                        9);  //Block color. Again, discarded by server. (Blue)
-		newPlayerBuffer.writeUInt8(     0,                        10); //(Green)
-		newPlayerBuffer.writeUInt8(     0,                        11); //(Red)
-		newPlayerBuffer.write(          peer.session.getPlayer().name, 12, 16, "cp437"); //Our name
-		newPlayerBuffer[27] = 0x0; //String must be null-terminated. We need to make sure our string ends in 0x0.
-		
-		peer.send(0, new enet.Packet(newPlayerBuffer, enet.Packet.FLAG_RELIABLE), function sendNewPlayerBufferCallback(err) {
-			if(err)
-				console.error( ("ERROR: " + err).bold.yellow.redBG );
-			else
-				console.log("We have a bot on ground.".bold.yellow.cyanBG);
-				peer.session.getPlayer().alive = true;
-		});
-		
-		//Load compute hook. We can unload it at any time.
-		//peer.session.players.computeHook = setInterval(botCompute, 50);
-		
-		//But wait! we still need to wait on the decode callback. So we will stop joining once that is finished.
-	}
+	
 },
 
 //Intel funcs (link to game.js)
-intelCap: gameFuncs.intelCap,
-
-intelPickup: gameFuncs.intelPickup,
-
-intelDropped: gameFuncs.intelDropped,
+intelCap:          gameFuncs.intelCap,
+intelPickup:       gameFuncs.intelPickup,
+intelDropped:      gameFuncs.intelDropped,
 
 //Player funcs (link to player.js)
-createPlayer: playerFuncs.createPlayer,
+createPlayer:      playerFuncs.createPlayer,
+existingPlayer:    playerFuncs.existingPlayer,
+shortPlayerData:   playerFuncs.shortPlayerData,
+selfPosition:      playerFuncs.selfPosition,
+playerPositions:   playerFuncs.playerPositions,
+teamChange:        playerFuncs.teamChange,
+weaponChange:      playerFuncs.weaponChange,
+setTool:           playerFuncs.setTool,
+setBlockColor:     playerFuncs.setBlockColor,
+restock:           playerFuncs.restock,
+killAction:        playerFuncs.killAction,
+playerLeft:        playerFuncs.playerLeft,
+setHealth:         playerFuncs.setHealth,
+weaponInput:       playerFuncs.weaponInput,
+inputData:         playerFuncs.inputData,
+spawnGrenade:      playerFuncs.spawnGrenade,
+weaponReload:      playerFuncs.weaponReload,
+blockLine:         playerFuncs.blockLine,
 
-existingPlayer: playerFuncs.existingPlayer,
-
-shortPlayerData: playerFuncs.shortPlayerData,
-
-selfPosition: playerFuncs.selfPosition,
-
-playerPositions: playerFuncs.playerPositions,
-
-teamChange: playerFuncs.teamChange,
-
-weaponChange: playerFuncs.weaponChange,
-
-setTool: playerFuncs.setTool,
-
-setBlockColor: playerFuncs.setBlockColor,
-
-restock: playerFuncs.restock,
-
-killAction: playerFuncs.killAction,
-
-playerLeft: playerFuncs.playerLeft,
-
-setHealth: playerFuncs.setHealth,
 
 /**
   * Handle packet 13, which contains information about a block that has changed.
 */
 blockAction: function blockAction(packet, map) {
+	if(packet.data().readUInt8(0) !== 13) return; //Dunno why it's putting some packets in here.
+	
 	var action = {
 		type: packet.data().readUInt8(2), //0 = build, 1 = bullet, 2 = spade, 3 = grenade
 		x: packet.data().readInt32LE(3),
@@ -275,11 +256,11 @@ blockAction: function blockAction(packet, map) {
 */
 chatMessage: function chatMessage(packet, players) {
 	console.log(
-		( packet.data().readUInt8(2) === 0 ? "<GLOBAL>".bold.white 
-		: packet.data().readUInt8(2) === 1 ? "<TEAM>".bold.blue
-		: packet.data().readUInt8(2) === 2 ? "<SYSTEM>".bold.yellow
+		( packet.data().readUInt8(2) === 0 ? "<GLOBAL> ".bold.white 
+		: packet.data().readUInt8(2) === 1 ? "<TEAM> ".bold.blue
+		: packet.data().readUInt8(2) === 2 ? "<SYSTEM> ".bold.yellow
 		: "<?>" )
-		+ (typeof players[packet.data().readUInt8(1)] != "undefined" ? players[packet.data().readUInt8(1)].name : "")
+		+ players[packet.data().readUInt8(1)].name
 		+ "\t"
 		+ ("(#" + packet.data().readUInt8(1) + "): ").bold
 		+ packet.data().toString("cp437", 3)

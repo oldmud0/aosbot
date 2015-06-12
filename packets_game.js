@@ -1,6 +1,6 @@
-var iconv	= require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
-iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encoding cp437.
-var colors 	= require("colors");		//Colors!
+var iconv   = require("iconv-lite");      //For converting our CP437 string to whatever encoding node uses
+iconv.extendNodeEncodings();              //Now we can use Buffer.toString() with the encoding cp437.
+var colors  = require("colors");          //Colors!
 
 module.exports = {
 /**
@@ -8,17 +8,17 @@ module.exports = {
 */
 getTeamData: function getTeamData(game, packet) {
 	game.team1 = {
-		blue:	packet.data().readUInt8(5),
-		green:	packet.data().readUInt8(6),
-		red:	packet.data().readUInt8(7),
-		name:	packet.data().toString("cp437", 11, 21)
+		blue: packet.data().readUInt8(5),
+		green:packet.data().readUInt8(6),
+		red:  packet.data().readUInt8(7),
+		name: packet.data().toString("cp437", 11, 21)
 	};
 	
 	game.team2 = {
-		blue:	packet.data().readUInt8(8),
-		green:	packet.data().readUInt8(9),
-		red:	packet.data().readUInt8(10),
-		name:	packet.data().toString("cp437", 22, 31)
+		blue: packet.data().readUInt8(8),
+		green:packet.data().readUInt8(9),
+		red:  packet.data().readUInt8(10),
+		name: packet.data().toString("cp437", 22, 31)
 	}
 },
 
@@ -77,8 +77,8 @@ getCTFData: function getCTFData(game, packet) {
 //Packet 23
 intelCap: function intelCap(packet, session) {
 	var capper = session.players[packet.data().readUInt8(1)];
-			
-	console.log( 
+	
+	console.log(
 	((capper.name)[capper.team === 0 ? "blue" : "green"].bold)
 	+ " just captured the intel for " + session.game[capper.team === 0 ? "team1" : "team2"].name + "!" 
 	+ (packet.data().readUInt8(2) === 1 ? "(win)" : "") 
@@ -89,7 +89,7 @@ intelCap: function intelCap(packet, session) {
 intelPickup: function intelPickup(packet, session) {
 	var capper = session.players[packet.data().readUInt8(1)];
 	
-	console.log( 
+	console.log(
 	((capper.name)[capper.team === 0 ? "blue" : "green"].bold)
 	+ " picked up the intel for " + session.game[capper.team === 0 ? "team1" : "team2"].name + "!"
 	);
@@ -104,7 +104,7 @@ intelPickup: function intelPickup(packet, session) {
 intelDropped: function intelDropped(packet, session) {
 	var capper = session.players[packet.data().readUInt8(1)];
 	
-	console.log( 
+	console.log(
 	((capper.name)[capper.team === 0 ? "blue" : "green"].bold)
 	+ " dropped the intel."
 	);
