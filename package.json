@@ -1,7 +1,7 @@
 {
   "name": "aosbot",
   "version": "0.2.1",
-  "description": "A CLI client for Ace of Spades 0.75 servers",
+  "description": "A backend for Ace of Spades 0.75 servers",
   "author": "oldmud0",
   "repository": {
     "type": "git",
@@ -12,9 +12,11 @@
     "enet":       ">=0.2.4",
     "zlib":       "*",
     "iconv-lite": "*"
+  },
+  "devDependencies": {
     "hex":        "*",
     "colors":     "*",
-    "ansi":       "*",
+    "ansi":       "*"
   },
   "license": "MIT"
 }
