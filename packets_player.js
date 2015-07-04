@@ -1,7 +1,6 @@
 var iconv   = require("iconv-lite");      //For converting our CP437 string to whatever encoding node uses
 iconv.extendNodeEncodings();              //Now we can use Buffer.toString() with the encoding cp437.
 var colors  = require("colors");          //Colors!
-var merge   = require("merge");           //Merging two player objects together instead of overwriting them
 
 var Player  = require("./player").Player;
 
@@ -16,8 +15,8 @@ createPlayer: function createPlayer(packet, players) {
 	//for spawning or for joining.
 	if(!players[id].inUse) {
 		players[id] = new Player(id);
-		player = players[id];
-		justJoined = true;
+		player      = players[id];
+		justJoined  = true;
 		player.name = packet.data().toString("cp437", 16).trim();
 	}
 	
@@ -25,11 +24,19 @@ createPlayer: function createPlayer(packet, players) {
 	player = players[id];
 	player.weapon = packet.data().readUInt8(2);
 	player.team   = packet.data().readInt8(3);
-	player.pos    = {
-		x: packet.data().readFloatLE(4),
-		y: packet.data().readFloatLE(8),
-		z: packet.data().readFloatLE(12)
-	};
+	
+	/*
+	 * All right, since there's not really anywhere to write this I'll write it here.
+	 * Do not try to "compress" the structure declaration by using object notation.
+	 * The reason for this is that it will create a new structure instead of changing only what's in it,
+	 * causing the old data to be dereferenced. This means that any monitor that has a reference to player.pos will stop working when pos
+	 * is updated via object notation.
+	 * So don't go the lazy route and it'll fix problems in the future :)
+	*/
+	player.pos.x  = packet.data().readFloatLE(4);
+	player.pos.y  = packet.data().readFloatLE(8);
+	player.pos.z  = packet.data().readFloatLE(12);
+	
 	player.alive = true;
 	player.respawnTime = 0;
 	
@@ -56,11 +63,10 @@ existingPlayer: function existingPlayer(packet, players) {
 	player.weapon   = packet.data().readUInt8(3);
 	player.heldItem = packet.data().readUInt8(4);
 	player.kills    = packet.data().readUInt32LE(5);
-	player.color    = {
-		b: packet.data().readUInt8(9),
-		g: packet.data().readUInt8(10),
-		r: packet.data().readUInt8(11)
-	};
+	player.color.b  = packet.data().readUInt8(9);
+	player.color.g  = packet.data().readUInt8(10);
+	player.color.r  = packet.data().readUInt8(11);
+	
 	player.name     = packet.data().toString("cp437", 12).trim();
 },
 
@@ -78,11 +84,9 @@ shortPlayerData: function shortPlayerData(packet, players) {
   * Handle packet 0, which returns our bot's position.
 */
 selfPosition: function selfPosition(packet, player) {
-	player.pos = {
-		x: packet.data().readFloatLE(1),
-		y: packet.data().readFloatLE(5),
-		z: packet.data().readFloatLE(9)
-	};
+	player.pos.x = packet.data().readFloatLE(1);
+	player.pos.y = packet.data().readFloatLE(5);
+	player.pos.z = packet.data().readFloatLE(9);
 },
 
 /**
@@ -251,14 +255,20 @@ inputData: function inputData(packet, players) {
 },
 
 spawnGrenade: function spawnGrenade(packet, map) {
+	var grenade = new Grenade();
+	grenade.playerId   = packet.data().readUInt8(1);
+	grenade.fuseLength = packet.data().readFloatLE(2);
 	
+	grenade.pos.x      = packet.data().readFloatLE(6);
+	grenade.pos.z      = packet.data().readFloatLE(10);
+	grenade.pos.y      = packet.data().readFloatLE(14);
+	
+	grenade.vel.x      = packet.data().readFloatLE(18);
+	grenade.vel.z      = packet.data().readFloatLE(22);
+	grenade.vel.y      = packet.data().readFloatLE(26);
 },
 
 weaponReload: function weaponReload(packet, players) {
-	//Play reload sound
-},
-
-blockLine: function blockLine(packet, map) {
-	
+	//TODO play reload sound
 }
 }

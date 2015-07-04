@@ -1,0 +1,20 @@
+{
+  "name": "aosbot",
+  "version": "0.2.1",
+  "description": "A CLI client for Ace of Spades 0.75 servers",
+  "author": "oldmud0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oldmud0/aosbot"
+  },
+  "keywords": ["aos", "spades", "client", "bot"],
+  "dependencies": {
+    "enet":       ">=0.2.4",
+    "zlib":       "*",
+    "iconv-lite": "*"
+    "hex":        "*",
+    "colors":     "*",
+    "ansi":       "*",
+  },
+  "license": "MIT"
+}

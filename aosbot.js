@@ -7,7 +7,6 @@ var ansi    = require("ansi")         //Carriage return doesn't seem to work, so
 var zlib    = require("zlib");        //For inflating the map when we finish downloading it
 var iconv   = require("iconv-lite");  //For converting our CP437 string to whatever encoding node uses
 iconv.extendNodeEncodings();          //Now we can use Buffer.toString() with the encoding cp437.
-var merge   = require("merge");       //Merging two player objects together instead of overwriting them
 
 //Local files
 var mapFuncs        = require("./map");
@@ -74,13 +73,14 @@ peer.on("connect", function connectCallback() {
 });
 
 var packetArgs = {
-	NONE: 0,
-	PACKET_PEER: 1,         //packet, peer
-	PACKET_SESSION: 2,      //packet, peer.session
-	PACKET_PLAYERS: 3,      //packet, peer.session.players
-	PACKET_SELF: 4,         //packet, peer.session.getPlayer()
-	PACKET_MAP: 5,          //packet, peer.session.map
-	PACKET_SELF_PLAYERS: 6  //packet, peer.session.getPlayer(), peer.session.players
+	NONE               : 0,
+	PACKET_PEER        : 1, //packet, peer
+	PACKET_SESSION     : 2, //packet, peer.session
+	PACKET_PLAYERS     : 3, //packet, peer.session.players
+	PACKET_SELF        : 4, //packet, peer.session.getPlayer()
+	PACKET_MAP         : 5, //packet, peer.session.map
+	PACKET_SELF_PLAYERS: 6, //packet, peer.session.getPlayer(), peer.session.players
+	PACKET_PLAYERS_MAP : 7
 }
 
 //Basically a jump table to clear up the big switch/case that we had earlier.
@@ -97,6 +97,7 @@ var packetList = {
 	"25": [packetHandling.intelDropped, packetArgs.PACKET_SESSION],  //Intel dropped
 	"21": [function() {return;},        packetArgs.NONE],            //Territory captured (nobody plays TC anymore :( )
 	"22": [function() {return;},        packetArgs.NONE],            //Territory capture progress bar
+	"27": [packetHandling.fogColor,     packetArgs.PACKET_SESSION],  //Set fog
 	//Player-related packets
 
 	//Create player (as response to the packet #9 that we sent).
@@ -117,11 +118,11 @@ var packetList = {
 	"27": [function() {return;},              packetArgs.NONE],            //Fog color
 	"16": [packetHandling.killAction,         packetArgs.PACKET_SELF_PLAYERS], //For printing out killfeed.
 	"20": [packetHandling.playerLeft,         packetArgs.PACKET_PLAYERS],
-	"13": [packetHandling.blockAction,        packetArgs.PACKET_MAP],
+	"13": [packetHandling.blockAction,        packetArgs.PACKET_PLAYERS_MAP],
 	"14": [packetHandling.blockLine,          packetArgs.PACKET_MAP],      //Block line. We need the *exact* line algorithm for us to do this correctly. (PySnip code)
 	"17": [packetHandling.chatMessage,        packetArgs.PACKET_PLAYERS],
 	"5":  [packetHandling.setHealth,          packetArgs.PACKET_SELF],
-	"6":  [packetHandling.spawnGrenade,       packetArgs.PACKET_MAP]
+	"6":  [packetHandling.spawnGrenade,       packetArgs.PACKET_MAP],
 }
 
 peer.on("message", function messageCallback(packet, channel) {
@@ -169,6 +170,9 @@ peer.on("message", function messageCallback(packet, channel) {
 				break;
 			case packetArgs.PACKET_SELF_PLAYERS:
 				packetEvent[0](packet, peer.session.getPlayer(), peer.session.players);
+				break;
+			case packetArgs.PACKET_PLAYERS_MAP:
+				packetEvent[0](packet, peer.session.players, peer.session.map);
 				break;
 		}
 	} else { //Any packets that we've missed?

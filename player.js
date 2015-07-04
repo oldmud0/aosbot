@@ -12,9 +12,10 @@ function Player(id) {
 	this.weapon    = 0; //Denotes which gun the player has equipped. (0 = rifle, 1 = smg, 2 = shotgun)
 	this.heldItem  = 0; //Denotes which tool the player is holding right now. (0 = spade, 1 = block, 2 = gun, 3 = grenade)
 	this.ammo      = 0;
+	
 	this.keyStates = {
 		forward: 0, back: 0, left: 0, right: 0,
-		crouch: 0, jump: 0, sneak: 0, sprint: 0,
+		crouch:  0, jump: 0, sneak: 0, sprint: 0,
 		primary: 0, secondary: 0
 	};
 	this.color     = {b: 0, g: 0, r: 0};

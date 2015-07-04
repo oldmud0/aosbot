@@ -2,7 +2,6 @@ var enet    = require('enet');		//We need to send some packets back to the serve
 var colors  = require("colors");		//Colors!
 var ansi    = require("ansi")		//Carriage return doesn't seem to work, so why not
    ,cursor  = ansi(process.stdout);
-var merge   = require("merge");		//Merging two player objects together instead of overwriting them
 var zlib    = require("zlib");		//For inflating the map when we finish downloading it
 var iconv   = require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
 iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encoding cp437.
@@ -172,9 +171,9 @@ gamemodeData: function gamemodeData(packet, peer) {
 	
 	//Construct fog and team objects
 	peer.session.game.fog = {
-		blue:  packet.data().readUInt8(2),
-		green: packet.data().readUInt8(3),
-		red:   packet.data().readUInt8(4)
+		b: packet.data().readUInt8(2),
+		g: packet.data().readUInt8(3),
+		r: packet.data().readUInt8(4)
 	};
 	
 	gameFuncs.getTeamData(peer.session.game, packet);
@@ -229,26 +228,25 @@ weaponInput:       playerFuncs.weaponInput,
 inputData:         playerFuncs.inputData,
 spawnGrenade:      playerFuncs.spawnGrenade,
 weaponReload:      playerFuncs.weaponReload,
-blockLine:         playerFuncs.blockLine,
-
 
 /**
   * Handle packet 13, which contains information about a block that has changed.
 */
-blockAction: function blockAction(packet, map) {
+blockAction: function blockAction(packet, players, map) {
 	if(packet.data().readUInt8(0) !== 13) return; //Dunno why it's putting some packets in here.
 	
+	var player = players[packet.data().readUInt8(1)];
 	var action = {
 		type: packet.data().readUInt8(2), //0 = build, 1 = bullet, 2 = spade, 3 = grenade
 		x: packet.data().readInt32LE(3),
-		y: packet.data().readInt32LE(7),
-		z: packet.data().readInt32LE(11)
+		z: packet.data().readInt32LE(7),
+		y: packet.data().readInt32LE(11)
 	};
 	
 	if(action.type === 0)
-		map.voxeldata[action.x][action.y][action.z] = 1;
+		map.voxeldata[action.x][action.y][action.z] = [1, {b: player.color.b, g: player.color.g, r: player.color.r}];
 	else
-		map.voxeldata[action.x][action.y][action.z] = 0;
+		map.voxeldata[action.x][action.y][action.z] = [0, {}];
 },
 
 /**
@@ -265,6 +263,18 @@ chatMessage: function chatMessage(packet, players) {
 		+ ("(#" + packet.data().readUInt8(1) + "): ").bold
 		+ packet.data().toString("cp437", 3)
 	);
+},
+
+fogColor: function fogColor(packet, session) {
+	session.game.fog = {
+		b: packet.data().readUInt8(1),
+		g: packet.data().readUInt8(2),
+		r: packet.data().readUInt8(3)
+	};
+},
+
+blockLine: function blockLine(packet, players, map) {
+	var player = players[packet.data().readUInt8(1)];
 }
 }
 

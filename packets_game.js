@@ -41,14 +41,14 @@ getCTFData: function getCTFData(game, packet) {
 			} : //If not, then it's just xyz coordinates.
 			{
 				x: packet.data().readFloatLE(36),
-				y: packet.data().readFloatLE(40),
-				z: packet.data().readFloatLE(44)
+				z: packet.data().readFloatLE(40),
+				y: packet.data().readFloatLE(44)
 			},
 			
 			base: {
 				x: packet.data().readFloatLE(60),
-				y: packet.data().readFloatLE(64),
-				z: packet.data().readFloatLE(68)
+				z: packet.data().readFloatLE(64),
+				y: packet.data().readFloatLE(68)
 			}
 		},
 				
@@ -61,14 +61,14 @@ getCTFData: function getCTFData(game, packet) {
 			} :
 			{
 				x: packet.data().readFloatLE(48),
-				y: packet.data().readFloatLE(52),
-				z: packet.data().readFloatLE(56)
+				z: packet.data().readFloatLE(52),
+				y: packet.data().readFloatLE(56)
 			},
 				
 			base: {
 				x: packet.data().readFloatLE(72),
-				y: packet.data().readFloatLE(76),
-				z: packet.data().readFloatLE(80)
+				z: packet.data().readFloatLE(76),
+				y: packet.data().readFloatLE(80)
 			}
 		}
 	};
@@ -112,8 +112,8 @@ intelDropped: function intelDropped(packet, session) {
 	//Set intel position according to packet
 	session.game.state[capper.team === 0 ? "team1" : "team2"].intel = {
 		x: packet.data().readInt32LE(2),
-		y: packet.data().readInt32LE(6),
-		z: packet.data().readInt32LE(10)
+		z: packet.data().readInt32LE(6),
+		y: packet.data().readInt32LE(10)
 	};
 }
 }
