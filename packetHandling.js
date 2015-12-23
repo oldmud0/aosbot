@@ -4,7 +4,6 @@ var ansi    = require("ansi")		//Carriage return doesn't seem to work, so why no
    ,cursor  = ansi(process.stdout);
 var zlib    = require("zlib");		//For inflating the map when we finish downloading it
 var iconv   = require("iconv-lite");	//For converting our CP437 string to whatever encoding node uses
-iconv.extendNodeEncodings();			//Now we can use Buffer.toString() with the encoding cp437.
 var buf2hex = require("hex");
 
 var mapFuncs      = require("./map");
@@ -131,7 +130,7 @@ gamemodeData: function gamemodeData(packet, peer) {
 			newPlayerBuffer.writeUInt8(     0,                        9);  //Block color. Again, discarded by server. (Blue)
 			newPlayerBuffer.writeUInt8(     0,                        10); //(Green)
 			newPlayerBuffer.writeUInt8(     0,                        11); //(Red)
-			newPlayerBuffer.write(          peer.session.getPlayer().name, 12, 16, "cp437"); //Our name
+			iconv.encode(peer.session.getPlayer().name, "cp437").copy(newPlayerBuffer, 12, 0, 16); //Our name
 			newPlayerBuffer[27] = 0x0; //String must be null-terminated. We need to make sure our string ends in 0x0.
 			
 			peer.send(0, new enet.Packet(newPlayerBuffer, enet.Packet.FLAG_RELIABLE), function sendNewPlayerBufferCallback(err) {
@@ -261,7 +260,7 @@ chatMessage: function chatMessage(packet, players) {
 		+ players[packet.data().readUInt8(1)].name
 		+ "\t"
 		+ ("(#" + packet.data().readUInt8(1) + "): ").bold
-		+ packet.data().toString("cp437", 3)
+		+ iconv.decode(packet.data().slice(3), "cp437")
 	);
 },
 
@@ -275,6 +274,16 @@ fogColor: function fogColor(packet, session) {
 
 blockLine: function blockLine(packet, players, map) {
 	var player = players[packet.data().readUInt8(1)];
+	var start = {
+		x: packet.data().readInt32LE(2),
+		z: packet.data().readInt32LE(6),
+		y: packet.data().readInt32LE(10)
+	};
+	var end = {
+		x: packet.data().readInt32LE(14),
+		z: packet.data().readInt32LE(18),
+		y: packet.data().readInt32LE(22)
+	};
 }
 }
 

@@ -10,9 +10,10 @@ initVoxelArray: function initVoxelArray(map) {
 		for(var y=0; y < 512; y++) {
 			map.voxeldata[x][y] = new Array(64); //Make the z dimension
 			for(var z=0; z < 64; z++)
-				map.voxeldata[x][y][z] = [0, {}];
+				map.voxeldata[x][y][z] = [];
 		}
 	}
+	console.log("Finished initializing map array.");
 },
 
 /**
@@ -89,7 +90,7 @@ loadMap: function loadMap(map) {
 
 checkCollision: function checkCollision(map, pos) {
 	
-}
+},
 
 cubeLine: function cubeLine(pos1, pos2, color) {
 	cubeLineNative(pos1.x, 64 - pos1.z, pos1.y, pos2.x, 64 - pos2.z, pos2.y, color);
@@ -167,5 +168,4 @@ function cubeLineNative(x1, y1, z1, x2, y2, z2, color) {
 			dy += dyi;
 		}
 	}
-}
 }

@@ -1,8 +1,8 @@
 var iconv   = require("iconv-lite");      //For converting our CP437 string to whatever encoding node uses
-iconv.extendNodeEncodings();              //Now we can use Buffer.toString() with the encoding cp437.
 var colors  = require("colors");          //Colors!
 
 var Player  = require("./player").Player;
+var Grenade = require("./grenade").Grenade;
 
 module.exports = {
 /**
@@ -17,7 +17,7 @@ createPlayer: function createPlayer(packet, players) {
 		players[id] = new Player(id);
 		player      = players[id];
 		justJoined  = true;
-		player.name = packet.data().toString("cp437", 16).trim();
+		player.name = iconv.decode(packet.data().slice(16), "cp437").trim();
 	}
 	
 	//Applies to both spawning and joining
@@ -67,7 +67,7 @@ existingPlayer: function existingPlayer(packet, players) {
 	player.color.g  = packet.data().readUInt8(10);
 	player.color.r  = packet.data().readUInt8(11);
 	
-	player.name     = packet.data().toString("cp437", 12).trim();
+	player.name     = iconv.decode(packet.data().slice(12), "cp437").trim();
 },
 
 /**

@@ -1,5 +1,4 @@
 var iconv   = require("iconv-lite");      //For converting our CP437 string to whatever encoding node uses
-iconv.extendNodeEncodings();              //Now we can use Buffer.toString() with the encoding cp437.
 var colors  = require("colors");          //Colors!
 
 module.exports = {
@@ -11,14 +10,14 @@ getTeamData: function getTeamData(game, packet) {
 		blue: packet.data().readUInt8(5),
 		green:packet.data().readUInt8(6),
 		red:  packet.data().readUInt8(7),
-		name: packet.data().toString("cp437", 11, 21)
+		name: iconv.decode(packet.data().slice(11, 21), "cp437")
 	};
 	
 	game.team2 = {
 		blue: packet.data().readUInt8(8),
 		green:packet.data().readUInt8(9),
 		red:  packet.data().readUInt8(10),
-		name: packet.data().toString("cp437", 22, 31)
+		name: iconv.decode(packet.data().slice(22, 31),"cp437")
 	}
 },
 

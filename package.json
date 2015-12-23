@@ -10,7 +10,6 @@
   "keywords": ["aos", "spades", "client", "bot"],
   "dependencies": {
     "enet":       ">=0.2.4",
-    "zlib":       "*",
     "iconv-lite": "*"
   },
   "devDependencies": {

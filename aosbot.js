@@ -6,15 +6,14 @@ var ansi    = require("ansi")         //Carriage return doesn't seem to work, so
    ,cursor  = ansi(process.stdout);
 var zlib    = require("zlib");        //For inflating the map when we finish downloading it
 var iconv   = require("iconv-lite");  //For converting our CP437 string to whatever encoding node uses
-iconv.extendNodeEncodings();          //Now we can use Buffer.toString() with the encoding cp437.
 
 //Local files
 var mapFuncs        = require("./map");
 var gameFuncs       = require("./packets_game");
 var packetHandling  = require("./packetHandling");
 
-var id = 3855533061;
-var port = 32887;
+var id = 3836663162;
+var port = 55568;
 
 var client, peer, serverAddr;
 
@@ -59,9 +58,6 @@ function connect(id, port) {
 	);
 	global.peer = peer;
 }
-
-initClient();
-connect(id, port);
 
 peer.on("connect", function connectCallback() {
 	//Connection success
@@ -220,3 +216,6 @@ function botCompute() {
 		//while(!done1 && !done2) {}
 	}
 }
+
+initClient();
+connect(id, port);

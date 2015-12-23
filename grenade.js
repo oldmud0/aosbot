@@ -16,13 +16,13 @@ function Grenade() {
 	this.alive      = true;
 }
 
-Grenade.prototype.explode() {
+Grenade.prototype.explode = function explode() {
 	//TODO play sound
 	//TODO particle effects
 	this.alive = false;
 }
 
-Grenade.prototype.move(dT) {
+Grenade.prototype.move = function move(dT) {
 	var fPos = {x: this.pos.x, y: this.pos.y, z: this.pos.z};
 	
 	//Velocity and gravity calculation
@@ -64,7 +64,7 @@ Grenade.prototype.move(dT) {
 	}
 }
 
-Grenade.prototype.update(dT) {
+Grenade.prototype.update = function update(dT) {
 	if(Date.now() - this.timeCreated >= this.fuseLength * 1000.)
 		this.explode(); //BOOM
 	else
