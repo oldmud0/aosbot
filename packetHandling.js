@@ -12,6 +12,7 @@ var playerFuncs   = require("./packets_player");
 var mapServer     = require("./interface");
 var Player        = require("./player").Player;
 var OwnPlayer     = require("./player").OwnPlayer;
+var dbg           = require("./debug");
 
 module.exports = {
 /**
@@ -80,11 +81,14 @@ gamemodeData: function gamemodeData(packet, peer) {
 		///////////////////////////////
 		cursor.horizontalAbsolute(0).write("Decompressing map...")
 		peer.session.map.decompressing = true;
+		console.time("map_decompress");
 		var err = zlib.inflate(peer.session.map.dataRaw, function inflateMapCallback(err, result) {
 			
 			//If we got an error, print it out and stop
 			if(err) {
 				console.error( ("DECOMPRESSION ERROR: " + err).bold.yellow.redBG );
+				
+				console.timeEnd("map_decompress");
 				return err;
 			}
 			
@@ -112,6 +116,7 @@ gamemodeData: function gamemodeData(packet, peer) {
 
 			console.log("--- Map load complete ---".bold.yellow.cyanBG);
 			peer.session.map.decompressing = false;
+			console.timeEnd("map_decompress");
 			
 			//////////////////
 			//Spawn the player

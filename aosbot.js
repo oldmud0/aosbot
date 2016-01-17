@@ -7,13 +7,17 @@ var ansi    = require("ansi")         //Carriage return doesn't seem to work, so
 var zlib    = require("zlib");        //For inflating the map when we finish downloading it
 var iconv   = require("iconv-lite");  //For converting our CP437 string to whatever encoding node uses
 
+//tell enet's unhandled exception handler to shut up for a moment, ok?
+process.removeAllListeners("uncaughtException"); 
+
 //Local files
 var mapFuncs        = require("./map");
 var gameFuncs       = require("./packets_game");
 var packetHandling  = require("./packetHandling");
+var debug           = require("./debug");
 
-var id = 3836663162;
-var port = 55568;
+var id = 3183838037;
+var port = 32887;
 
 var client, peer, serverAddr;
 
@@ -59,13 +63,17 @@ function connect(id, port) {
 	global.peer = peer;
 }
 
+initClient();
+connect(id, port);
+
 peer.on("connect", function connectCallback() {
 	//Connection success
-	console.log("Connection established to " + serverAddr.hostToString() + " through port " + serverAddr.port());
+	console.log("Connection established to " + serverAddr.hostToString().green + " through port " + serverAddr.port());
 	peer.ping();
 	
 	peer.session = {};
 	peer.session.packetQueue = [];
+	peer.session.packetCount = 0;
 });
 
 var packetArgs = {
@@ -122,18 +130,23 @@ var packetList = {
 }
 
 peer.on("message", function messageCallback(packet, channel) {
-	packetID = packet.data().readUInt8(0);
+	var packetID = packet.data().readUInt8(0);
+	
+	peer.session.packetCount++;
+	debug.print("("+peer.session.packetCount+") got packet #"+packetID);
 	
 	if(typeof peer.session.map !== "undefined") {
 		//If the map is decompressing, throw the block action packets into a queue.
 		if(peer.session.map.decompressing && packetID === 13) {
 			//We have to copy the packet data since the packet object itself is bound by pointer to the callback.
+			debug.print("Winding up... (Length="+peer.session.packetQueue.length+")");
 			peer.session.packetQueue.push(new enet.Packet(packet.data()));
 			return;
 		}
 
 		//If we just finished decompressing the map and the packet queue is not empty, let's run some recursion to handle each one.
 		if(!peer.session.map.decompressing && peer.session.packetQueue.length !== 0) {
+			debug.print("Rewinding... (Length="+peer.session.packetQueue.length+")");
 			var pop = peer.session.packetQueue.shift();
 			messageCallback(pop, channel);
 		}
@@ -216,6 +229,3 @@ function botCompute() {
 		//while(!done1 && !done2) {}
 	}
 }
-
-initClient();
-connect(id, port);

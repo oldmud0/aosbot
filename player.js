@@ -19,7 +19,7 @@ function Player(id) {
 		primary: 0, secondary: 0
 	};
 	this.color     = {b: 0, g: 0, r: 0};
-	               
+	
 	this.pos       = {x: 0, y: 0, z: 0};
 	this.oldPos    = {x: 0, y: 0, z: 0};
 	this.newPosTime = Date.now();
@@ -34,7 +34,11 @@ function Player(id) {
 	
 	this.alive     = true;
 	this.respawnTime = 0;
-	this.inUse     = true; //No longer in use when player leaves.
+}
+
+Player.prototype.inUse = function inUse() {
+	return !(pos.x    === 0 && pos.y === 0    && pos.z === 0 &&
+	         orient.x === 0 && orient.y === 0 && orient.z === 0);
 }
 
 Player.prototype.getX = function getX() {

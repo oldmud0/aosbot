@@ -1,5 +1,6 @@
 var iconv   = require("iconv-lite");      //For converting our CP437 string to whatever encoding node uses
 var colors  = require("colors");          //Colors!
+var dbg = require("./debug");
 
 var Player  = require("./player").Player;
 var Grenade = require("./grenade").Grenade;
@@ -13,7 +14,7 @@ createPlayer: function createPlayer(packet, players) {
 	
 	//You have to differentiate between whether createPlayer is being used
 	//for spawning or for joining.
-	if(!players[id].inUse) {
+	if(!players[id].inUse()) {
 		players[id] = new Player(id);
 		player      = players[id];
 		justJoined  = true;
@@ -47,6 +48,8 @@ createPlayer: function createPlayer(packet, players) {
 		player.name.bold)
 		+ " has joined the server.");
 	}
+	
+	dbg.print("Created player with id="+id+", just joined="+justJoined);
 },
 
 /**
@@ -55,7 +58,7 @@ createPlayer: function createPlayer(packet, players) {
 */
 existingPlayer: function existingPlayer(packet, players) {
 	var id = packet.data().readUInt8(1);
-	if(typeof players[id] === "undefined" || !players[id].inUse)
+	if(typeof players[id] === "undefined" || !players[id].inUse())
 		players[id] = new Player(id);
 	var player = players[id];
 	
@@ -68,6 +71,8 @@ existingPlayer: function existingPlayer(packet, players) {
 	player.color.r  = packet.data().readUInt8(11);
 	
 	player.name     = iconv.decode(packet.data().slice(12), "cp437").trim();
+	
+	dbg.print("Existing player created, id="+id+", name="+player.name);
 },
 
 /**
@@ -78,6 +83,8 @@ shortPlayerData: function shortPlayerData(packet, players) {
 	
 	players[id].team   = packet.data().readInt8(2);
 	players[id].weapon = packet.data().readUInt8(3);
+	
+	dbg.print("Got short player data, id="+id);
 },
 
 /**
@@ -87,6 +94,8 @@ selfPosition: function selfPosition(packet, player) {
 	player.pos.x = packet.data().readFloatLE(1);
 	player.pos.y = packet.data().readFloatLE(5);
 	player.pos.z = packet.data().readFloatLE(9);
+	
+	dbg.print("Our position: ("+player.pos.x+","+player.pos.y+","+player.pos.z+")");
 },
 
 /**
@@ -112,6 +121,8 @@ playerPositions: function playerPositions(packet, players) {
 		}
 		offset += 24;
 	}
+	
+	dbg.print(JSON.stringify(peer.session.players, null, 2));
 },
 
 /**
@@ -160,6 +171,7 @@ setBlockColor: function setBlockColor(packet, players) {
   * Currently, we only care if the packet is directed towards the bot.
 */
 restock: function restock(packet, player) {
+	dbg.print("Restocked id="+player.id+" ("+player.name+")");
 	if(packet.data().readUInt8(1) === player.id) {
 		//TODO: uh, we don't have any weapon info.
 	}
@@ -202,6 +214,7 @@ killAction: function killAction(packet, player, players) {
 		if(ply.alive || ply.respawnTime <= 0) {
 			ply.alive = true;
 			ply.respawnTime = 0;
+			dbg.print("Respawned id="+ply.id);
 		} else 
 			setTimeout(respawnTimer, 1000, ply);
 	}, 1000, victim);
@@ -211,14 +224,17 @@ killAction: function killAction(packet, player, players) {
   * Handle packet 20, which announces when a player has left the server.
 */
 playerLeft: function playerLeft(packet, players) {
-	console.log( 
-	((players[packet.data().readUInt8(1)].name).white.bold)
-	+ " left the server."
-	);
+	var player = players[packet.data().readUInt8(1)];
+	console.log(player.name.white.bold + " left the server.");
 	
 	//We should not set to undefined because there may be packets left that are dependent on this player
 	//e.g. grenades, death
-	players[packet.data().readUInt8(1)].inUse = false;
+	player.pos.x = 0;
+	player.pos.y = 0;
+	player.pos.z = 0;
+	player.orient.x = 0;
+	player.orient.y = 0;
+	player.orient.z = 0;
 },
 
 /**
@@ -238,6 +254,8 @@ weaponInput: function weaponInput(packet, players) {
 	var type   = packet.data().readUInt8(2);
 	player.keyStates.primary   = type & 1;        //AND 00000001 (base 2) to get the first bit only
 	player.keyStates.secondary = (type & 2) >> 1; //AND 00000010 to get the second bit and shift it over
+	
+	dbg.print("input id="+player.id+" MOUSE1: "+player.keyStates.primary+" MOUSE2: "+player.keystates.secondary);
 },
 
 inputData: function inputData(packet, players) {

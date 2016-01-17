@@ -1,5 +1,6 @@
 var iconv   = require("iconv-lite");      //For converting our CP437 string to whatever encoding node uses
 var colors  = require("colors");          //Colors!
+var dbg = require("./debug");
 
 module.exports = {
 /**
@@ -19,12 +20,15 @@ getTeamData: function getTeamData(game, packet) {
 		red:  packet.data().readUInt8(10),
 		name: iconv.decode(packet.data().slice(22, 31),"cp437")
 	}
+	
+	dbg.print("Got team data");
 },
 
 /**
   * Get data about CTF from packet 15, assuming that the gamemode is CTF.
 */
 getCTFData: function getCTFData(game, packet) {
+	//TODO change this to regular assignments
 	game.state = {
 		gamemode: packet.data().readUInt8(31),
 		captureLimit: packet.data().readUInt8(34),
@@ -71,6 +75,8 @@ getCTFData: function getCTFData(game, packet) {
 			}
 		}
 	};
+	
+	dbg.print("Got CTF data, gamemode id is "+game.state.gamemode);
 },
 
 //Packet 23

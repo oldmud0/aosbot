@@ -1,4 +1,5 @@
 var map = require("./map");
+var dbg = require("./debug");
 
 module.exports.Grenade = Grenade;
 
@@ -20,6 +21,7 @@ Grenade.prototype.explode = function explode() {
 	//TODO play sound
 	//TODO particle effects
 	this.alive = false;
+	dbg.print("Grenade went BOOM!");
 }
 
 Grenade.prototype.move = function move(dT) {
